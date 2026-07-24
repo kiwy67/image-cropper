@@ -1,0 +1,1167 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>裁切台 · 保留浮水印的無損比例裁切</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0d0f12; --panel:#14171c; --panel2:#1a1e25; --line:#272c35;
+  --txt:#e8ebef; --dim:#8b94a1; --dim2:#5f6875;
+  --amber:#f0a93b; --amber-dim:rgba(240,169,59,.14);
+  --cyan:#5ec9d6; --cyan-dim:rgba(94,201,214,.12);
+  --bad:#e46a5c;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ink);color:var(--txt);
+  font-family:"Noto Sans TC","Space Grotesk",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+.shell{display:flex;flex-direction:column;height:100vh;height:100dvh}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:12px 20px;
+  border-bottom:1px solid var(--line);background:linear-gradient(180deg,#16191f,#111419)}
+header h1{margin:0;font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:17px;letter-spacing:.02em}
+header h1 .dot{color:var(--amber)}
+header .sub{color:var(--dim2);font-size:12px;letter-spacing:.04em}
+header .spacer{flex:1}
+header .fileinfo{font-size:11.5px;color:var(--dim);letter-spacing:.03em}
+
+/* ---- 分頁列 ---- */
+.tabbar{display:flex;align-items:stretch;gap:2px;padding:0 10px;background:#101318;
+  border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin;min-height:44px}
+.tab{display:flex;align-items:center;gap:8px;flex:0 0 auto;max-width:230px;padding:0 4px 0 8px;
+  border:0;border-bottom:2px solid transparent;background:none;cursor:pointer;
+  font-family:inherit;color:var(--dim2);position:relative}
+.tab:hover{color:var(--dim);background:rgba(255,255,255,.025)}
+.tab.on{color:var(--txt);border-bottom-color:var(--amber);background:var(--ink)}
+.tab .tt{width:26px;height:20px;object-fit:cover;border-radius:3px;flex:0 0 auto;
+  border:1px solid var(--line);background:#000}
+.tab .tt.blank{background:repeating-linear-gradient(45deg,#1a1e25 0 4px,#141820 4px 8px)}
+.tab .tn{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:104px}
+.tab .tr{font-size:10px;letter-spacing:.05em;color:var(--dim2);flex:0 0 auto}
+.tab.on .tr{color:var(--amber)}
+.tab .ta,.tab .tx{width:20px;height:20px;border:0;border-radius:4px;background:none;cursor:pointer;
+  color:var(--dim2);font-size:12px;line-height:1;padding:0;flex:0 0 auto;opacity:0}
+.tab:hover .ta,.tab:hover .tx,.tab.on .ta,.tab.on .tx{opacity:1}
+.tab .ta:hover{background:var(--amber);color:#1a1206}
+.tab .tx:hover{background:#3a2220;color:#f0a498}
+.newtab{flex:0 0 auto;align-self:center;width:28px;height:28px;margin-left:4px;border-radius:6px;
+  border:1px dashed var(--line);background:none;color:var(--dim2);font-size:16px;line-height:1;cursor:pointer}
+.newtab:hover{border-color:var(--amber);color:var(--amber)}
+
+main{flex:1;display:grid;grid-template-columns:1fr 328px;min-height:0}
+@media (max-width:900px){
+  main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto;overflow:auto}
+  .side{border-left:none!important;border-top:1px solid var(--line)}
+}
+.stagewrap{display:flex;flex-direction:column;min-width:0;min-height:0}
+.stage{flex:1;min-height:260px;position:relative;display:flex;align-items:center;justify-content:center;
+  padding:22px;background:radial-gradient(120% 90% at 50% 0%,#1c2028 0%,#0d0f12 68%);overflow:hidden}
+#view{touch-action:none;cursor:grab;border-radius:2px;box-shadow:0 20px 60px rgba(0,0,0,.55)}
+#view.dragging{cursor:grabbing}
+.empty{text-align:center;color:var(--dim2);max-width:440px}
+.empty .big{font-family:"Space Grotesk";font-size:19px;color:var(--dim);margin-bottom:8px}
+.empty p{font-size:13px;line-height:1.8;margin:0 0 18px}
+.dropline{border:1px dashed var(--line);border-radius:10px;padding:26px 22px;transition:border-color .18s,background .18s}
+body.dropping .dropline{border-color:var(--amber);background:var(--amber-dim)}
+
+.readout{display:flex;border-top:1px solid var(--line);background:var(--panel);overflow-x:auto}
+.readout .cell{padding:9px 16px;border-right:1px solid var(--line);white-space:nowrap}
+.readout .k{font-size:10px;letter-spacing:.12em;color:var(--dim2);text-transform:uppercase;display:block}
+.readout .v{font-size:13px;color:var(--txt)}
+.readout .v.acc{color:var(--amber)} .readout .v.cy{color:var(--cyan)} .readout .v.bad{color:var(--bad)}
+
+.side{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:4px 0 22px}
+.grp{padding:16px 18px;border-bottom:1px solid var(--line)}
+.grp h2{margin:0 0 12px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim2);
+  font-weight:500;font-family:"IBM Plex Mono",monospace;display:flex;align-items:center;gap:8px}
+.grp h2::after{content:"";flex:1;height:1px;background:var(--line)}
+.rlabel{font-size:10.5px;color:var(--dim2);margin:12px 0 6px;letter-spacing:.1em}
+.rlabel:first-child{margin-top:0}
+.ratios{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:6px 9px;border-radius:6px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--dim);cursor:pointer;transition:.14s}
+.chip:hover{border-color:#3a4150;color:var(--txt)}
+.chip.on{background:var(--amber);border-color:var(--amber);color:#1a1206;font-weight:500}
+.row{display:flex;align-items:center;gap:9px;margin-top:10px}
+input[type=number]{width:100%;background:#0f1216;border:1px solid var(--line);color:var(--txt);
+  border-radius:6px;padding:6px 8px;font-family:"IBM Plex Mono",monospace;font-size:12px}
+input[type=number]:focus{outline:2px solid var(--amber-dim);border-color:var(--amber)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line);border-radius:2px;margin:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--amber);border:3px solid var(--panel);box-shadow:0 0 0 1px var(--amber);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--amber);
+  border:3px solid var(--panel);cursor:pointer}
+.sliderhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+.sliderhead span:first-child{font-size:12px;color:var(--dim)}
+.sliderhead span:last-child{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--amber)}
+.seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{flex:1;padding:7px 4px;font-size:11.5px;background:var(--panel2);color:var(--dim);
+  border:0;border-right:1px solid var(--line);cursor:pointer;font-family:inherit}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--amber);color:#1a1206;font-weight:500}
+.nine{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:10px}
+.nine button{aspect-ratio:16/10;background:var(--panel2);border:1px solid var(--line);border-radius:5px;cursor:pointer;position:relative}
+.nine button::after{content:"";position:absolute;width:8px;height:6px;border-radius:1px;background:var(--dim2)}
+.nine button:hover::after{background:var(--amber)}
+.nine button[data-p="0 0"]::after{top:4px;left:4px} .nine button[data-p=".5 0"]::after{top:4px;left:50%;transform:translateX(-50%)} .nine button[data-p="1 0"]::after{top:4px;right:4px}
+.nine button[data-p="0 .5"]::after{top:50%;left:4px;transform:translateY(-50%)} .nine button[data-p=".5 .5"]::after{top:50%;left:50%;transform:translate(-50%,-50%)} .nine button[data-p="1 .5"]::after{top:50%;right:4px;transform:translateY(-50%)}
+.nine button[data-p="0 1"]::after{bottom:4px;left:4px} .nine button[data-p=".5 1"]::after{bottom:4px;left:50%;transform:translateX(-50%)} .nine button[data-p="1 1"]::after{bottom:4px;right:4px}
+.hint{font-size:11px;color:var(--dim2);line-height:1.7;margin:9px 0 0}
+.hint b{color:var(--dim);font-weight:500}
+.linkbtn{background:none;border:0;padding:0;cursor:pointer;font-family:inherit;font-size:11px;
+  color:var(--dim2);text-decoration:underline;text-underline-offset:3px}
+.linkbtn:hover{color:var(--txt)}
+.microrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px;
+  font-size:11px;color:var(--dim2)}
+.wmcard{display:flex;align-items:center;gap:11px;padding:10px;border:1px solid var(--line);
+  border-radius:8px;background:var(--panel2)}
+.wmcard .sample{flex:1;min-width:0;background:#fff;border-radius:3px;display:flex;align-items:center;
+  justify-content:center;overflow:hidden}
+.wmcard .sample img{width:100%;display:block}
+.wmcard.off{opacity:.35}
+.preview{margin-top:2px;background:repeating-conic-gradient(#191d23 0 25%,#14171c 0 50%) 0 0/14px 14px;
+  border:1px solid var(--line);border-radius:7px;padding:10px;display:flex;justify-content:center;
+  cursor:zoom-in;position:relative}
+.preview::after{content:"點一下放大";position:absolute;right:8px;bottom:7px;font-size:9.5px;letter-spacing:.08em;
+  font-family:"IBM Plex Mono",monospace;color:rgba(232,235,239,.55);background:rgba(10,12,15,.7);
+  padding:2px 6px;border-radius:4px;pointer-events:none}
+#result{max-width:100%;display:block;border-radius:2px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.btn{width:100%;padding:11px;border-radius:8px;border:1px solid var(--amber);background:var(--amber);
+  color:#1a1206;font-family:inherit;font-weight:700;font-size:13.5px;cursor:pointer;letter-spacing:.03em}
+.btn:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.35;cursor:not-allowed;filter:none}
+.btn.ghost{background:transparent;color:var(--dim);border-color:var(--line);font-weight:500}
+.btn.ghost:hover{color:var(--txt);border-color:#3a4150;filter:none}
+.badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}
+.badge{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.06em;padding:3px 6px;
+  border-radius:4px;border:1px solid rgba(94,201,214,.35);background:var(--cyan-dim);color:var(--cyan)}
+.badge.off{border-color:var(--line);background:transparent;color:var(--dim2)}
+.warn{margin-top:10px;padding:9px 11px;border-radius:7px;border:1px solid rgba(228,106,92,.35);
+  background:rgba(228,106,92,.08);color:#f0a498;font-size:11.5px;line-height:1.65;display:none}
+.warn.show{display:block}
+.loaderr{margin-top:16px;padding:9px 12px;border-radius:7px;text-align:left;
+  border:1px solid rgba(228,106,92,.35);background:rgba(228,106,92,.08);color:#f0a498;
+  font-size:11.5px;line-height:1.7;display:none}
+.loaderr.show{display:block}
+
+/* ---- 匯出對話框 ---- */
+.modal{position:fixed;inset:0;z-index:25;background:rgba(6,8,10,.72);display:flex;
+  align-items:center;justify-content:center;padding:24px}
+.modal[hidden]{display:none}
+.sheet{width:min(460px,100%);max-height:min(640px,90vh);display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
+.sheet h3{margin:0;padding:16px 18px;font-size:13px;letter-spacing:.04em;font-weight:500;
+  border-bottom:1px solid var(--line)}
+.sheet .body{padding:16px 18px;overflow-y:auto}
+.opt{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);
+  border-radius:8px;background:var(--panel2);cursor:pointer;margin-bottom:7px;font-size:12.5px}
+.opt:hover{border-color:#3a4150}
+.opt.on{border-color:var(--amber);background:var(--amber-dim)}
+.opt .dotmark{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--dim2);flex:0 0 auto;position:relative}
+.opt.on .dotmark{border-color:var(--amber)}
+.opt.on .dotmark::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--amber)}
+.opt em{font-style:normal;color:var(--dim2);font-size:11px;margin-left:auto;font-family:"IBM Plex Mono",monospace}
+.picklist{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:4px 0 2px}
+.picklist[hidden]{display:none}
+.pick{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--line);
+  cursor:pointer;font-size:12px}
+.pick:last-child{border-bottom:0}
+.pick:hover{background:var(--panel2)}
+.pick .box{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--dim2);flex:0 0 auto;position:relative}
+.pick.on .box{border-color:var(--amber);background:var(--amber)}
+.pick.on .box::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+  border:solid #1a1206;border-width:0 2px 2px 0;transform:rotate(42deg)}
+.pick img{width:34px;height:24px;object-fit:cover;border-radius:3px;border:1px solid var(--line);background:#000}
+.pick .pn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick .pm{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--dim2)}
+.pickall{display:flex;justify-content:space-between;align-items:center;margin:2px 0 10px;font-size:11px;color:var(--dim2)}
+.pickall[hidden]{display:none}
+.sheet .foot{display:flex;gap:9px;align-items:center;padding:14px 18px;border-top:1px solid var(--line)}
+.sheet .foot .stat{flex:1;font-size:11.5px;color:var(--dim2);font-family:"IBM Plex Mono",monospace}
+.sheet .foot .btn{width:auto;padding:9px 18px;font-size:12.5px}
+
+.lb{position:fixed;inset:0;z-index:20;background:rgba(6,8,10,.94);display:flex;
+  align-items:center;justify-content:center;overflow:hidden;cursor:zoom-out}
+.lb[hidden]{display:none}
+.lb canvas{display:block;box-shadow:0 30px 90px rgba(0,0,0,.7);cursor:grab;transform-origin:center center}
+.lb canvas.panning{cursor:grabbing}
+.lbbar{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);display:flex;gap:16px;
+  align-items:center;background:rgba(20,23,28,.92);border:1px solid var(--line);border-radius:9px;
+  padding:8px 14px;font-size:11.5px;color:var(--dim);pointer-events:none;white-space:nowrap}
+.lbbar .z{color:var(--amber)} .lbbar .tip{color:var(--dim2)}
+
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);background:#20252d;
+  border:1px solid var(--line);color:var(--txt);padding:10px 16px;border-radius:9px;font-size:12.5px;
+  opacity:0;pointer-events:none;transition:.22s;box-shadow:0 12px 34px rgba(0,0,0,.55);z-index:30}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="shell">
+  <header>
+    <h1>裁切台<span class="dot">.</span></h1>
+    <span class="sub mono">LOSSLESS RATIO CROP · WATERMARK APPENDED</span>
+    <span class="spacer"></span>
+    <span class="fileinfo mono" id="fileinfo">尚未載入影像</span>
+  </header>
+
+  <div class="tabbar" id="tabbar"></div>
+
+  <main>
+    <div class="stagewrap">
+      <div class="stage" id="stage">
+        <div class="empty" id="empty">
+          <div class="dropline">
+            <div class="big">把照片拖進來</div>
+            <p>每張照片開一個分頁，比例、裁切、浮水印各自獨立。<br>畫面上只裁照片，浮水印在右側結果預覽才出現。</p>
+            <button class="btn" id="pick" style="width:auto;padding:10px 22px">選擇檔案</button>
+            <div class="loaderr" id="loaderr"></div>
+          </div>
+        </div>
+        <canvas id="view" hidden></canvas>
+      </div>
+      <div class="readout mono" id="readout" hidden>
+        <div class="cell"><span class="k">來源</span><span class="v" id="rSrc">—</span></div>
+        <div class="cell"><span class="k">照片區</span><span class="v acc" id="rCrop">—</span></div>
+        <div class="cell"><span class="k">浮水印</span><span class="v cy" id="rWm">—</span></div>
+        <div class="cell"><span class="k">輸出</span><span class="v" id="rOut">—</span></div>
+        <div class="cell"><span class="k">中繼資料</span><span class="v cy" id="rMeta">—</span></div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="grp">
+        <h2>輸出比例</h2>
+        <div class="rlabel mono">橫式</div><div class="ratios" id="rowLand"></div>
+        <div class="rlabel mono">直式</div><div class="ratios" id="rowPort"></div>
+        <div class="rlabel mono">方形 / 自訂</div><div class="ratios" id="rowSq"></div>
+        <div class="row">
+          <input type="number" id="cw" min="1" step="0.01" value="4">
+          <span class="mono" style="color:var(--dim2)">:</span>
+          <input type="number" id="chh" min="1" step="0.01" value="3">
+          <button class="chip" id="applyCustom">套用</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <h2>浮水印</h2>
+        <div class="wmcard" id="wmcard"><div class="sample"><img id="wmSample" alt="浮水印"></div></div>
+        <div class="seg" id="wmMode" style="margin-top:10px">
+          <button data-v="crop" class="on">裁切</button>
+          <button data-v="scale">縮放</button>
+          <button data-v="off">不加</button>
+        </div>
+        <p class="hint" id="wmHint">白條維持照片原本的尺度，左右兩側跟著照片一起被裁掉，標誌保持原本的畫素大小、置中。</p>
+        <div class="microrow">
+          <span id="wmName">內建：DJI OSMO POCKET 4P</span>
+          <button class="linkbtn" id="wmPick">換一張</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <h2>裁切範圍</h2>
+        <div class="sliderhead"><span>大小</span><span id="sizeVal">100%</span></div>
+        <input type="range" id="size" min="20" max="100" value="100" step="1">
+        <div class="nine" id="nine">
+          <button data-p="0 0" title="左上"></button><button data-p=".5 0" title="上"></button><button data-p="1 0" title="右上"></button>
+          <button data-p="0 .5" title="左"></button><button data-p=".5 .5" title="置中"></button><button data-p="1 .5" title="右"></button>
+          <button data-p="0 1" title="左下"></button><button data-p=".5 1" title="下"></button><button data-p="1 1" title="右下"></button>
+        </div>
+        <p class="hint"><b>拖曳</b>移動裁切框，<b>方向鍵</b>微調 1px、<b>Shift</b> 加方向鍵移動 10px。</p>
+        <div class="microrow">
+          <span id="trimInfo">—</span>
+          <button class="linkbtn" id="tweak">手動調</button>
+        </div>
+        <div id="trimAdv" hidden style="margin-top:10px">
+          <input type="range" id="trimH" min="0" max="1000" value="0" step="1">
+          <div class="row">
+            <input type="number" id="trimNum" min="0" step="1" value="0">
+            <button class="chip" id="reDetect">重新偵測</button>
+          </div>
+        </div>
+        <div class="microrow"><span>把這些設定套到所有分頁</span><button class="linkbtn" id="applyAll">套用</button></div>
+      </div>
+
+      <div class="grp">
+        <h2>中繼資料</h2>
+        <div class="seg" id="metaMode">
+          <button data-m="all" class="on">全部保留</button>
+          <button data-m="nogps">移除定位</button>
+          <button data-m="none">全部清除</button>
+        </div>
+        <div class="badges" id="badges"></div>
+        <p class="hint" id="metaHint">拍攝參數、鏡頭、時間、GPS、色彩描述檔全部寫回輸出檔；方向標記歸零、尺寸改成新的裁切結果。</p>
+      </div>
+
+      <div class="grp">
+        <h2>結果預覽</h2>
+        <div class="preview" id="previewBox"><canvas id="result"></canvas></div>
+      </div>
+
+      <div class="grp" style="border-bottom:none">
+        <h2>匯出</h2>
+        <div class="seg" id="fmt">
+          <button data-f="png" class="on">PNG 無損</button>
+          <button data-f="webp">WebP 無損</button>
+          <button data-f="jpeg">JPEG 100</button>
+        </div>
+        <p class="hint" id="fmtHint">照片區畫素 1:1 複製，不縮放、不重新編碼；浮水印是當場依輸出尺寸重繪的。</p>
+        <div class="warn" id="warn"></div>
+        <button class="btn" id="save" style="margin-top:14px" disabled>匯出…</button>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div class="modal" id="exp" hidden>
+  <div class="sheet">
+    <h3>匯出</h3>
+    <div class="body">
+      <div class="opt on" data-s="one"><span class="dotmark"></span><span id="optOneName">這個分頁</span><em id="optOneMeta"></em></div>
+      <div class="opt" data-s="pick"><span class="dotmark"></span><span>選取分頁</span><em id="optPickMeta"></em></div>
+      <div class="opt" data-s="all"><span class="dotmark"></span><span>全部分頁</span><em id="optAllMeta"></em></div>
+      <div class="pickall" id="pickAllRow" hidden>
+        <span id="pickCount">已選 0 個</span>
+        <span><button class="linkbtn" id="pickAll">全選</button> · <button class="linkbtn" id="pickNone">全不選</button></span>
+      </div>
+      <div class="picklist" id="pickList" hidden></div>
+    </div>
+    <div class="foot">
+      <span class="stat" id="expStat"></span>
+      <button class="btn ghost" id="expCancel" style="width:auto;padding:9px 16px">取消</button>
+      <button class="btn" id="expGo" style="width:auto;padding:9px 18px">開始匯出</button>
+    </div>
+  </div>
+</div>
+
+<div class="lb" id="lb" hidden>
+  <canvas id="lbc"></canvas>
+  <div class="lbbar mono">
+    <span id="lbSize"></span><span class="z" id="lbZoom"></span>
+    <span class="tip">滾輪縮放 · 拖曳移動 · 點空白處關閉</span>
+  </div>
+</div>
+
+<input type="file" id="file" accept="image/*" multiple hidden>
+<input type="file" id="wmFile" accept="image/*" hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const view = $('#view'), vctx = view.getContext('2d');
+const result = $('#result'), rctx = result.getContext('2d');
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+
+/* 每個分頁自己帶著 ratio / size / px,py / trim / wmMode，格式與中繼資料是全域輸出設定 */
+const S = { tabs: [], active: 0, fmt:'png', meta:'all' };
+const DEF = seed => Object.assign(
+  { ratio:{w:4,h:3}, size:1, px:.5, py:.5, wmMode:'crop' },
+  seed ? {ratio:{...seed.ratio}, size:seed.size, wmMode:seed.wmMode} : {},
+  { name:'新分頁', img:null, thumb:null, W:0, H:0, trim:0, meta:null, cs:null, csW:0, sm:null });
+S.tabs.push(DEF());
+
+/* ---- 降取樣快取：畫面與預覽都不直接動原圖，原圖只在匯出時用 ---- */
+function stageCache(t, w){
+  if(t.cs && t.csW === w) return t.cs;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = Math.max(1, Math.round(t.H * w / t.W));
+  const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+  x.drawImage(t.img, 0, 0, c.width, c.height);
+  t.cs = c; t.csW = w; return c;
+}
+function smallCache(t){
+  if(t.sm) return t.sm;
+  const w = Math.min(t.W, 900);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = Math.max(1, Math.round(t.H * w / t.W));
+  const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+  x.drawImage(t.img, 0, 0, c.width, c.height);
+  t.sm = c; return c;
+}
+function makeThumb(t){
+  const sm = smallCache(t);
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = Math.max(1, Math.round(sm.height * 128 / sm.width));
+  c.getContext('2d').drawImage(sm, 0, 0, c.width, c.height);
+  t.thumb = c.toDataURL('image/jpeg', .72);
+}
+
+/* ============ 浮水印素材 ============ */
+const BAR = { aspect: 400/3840, logoW: 0.23620, logoH: 0.27000, logoTop: 0.36500 };
+const logo = new Image();
+logo.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA4sAAABsCAYAAADDuifEAABhcUlEQVR42u29d5hsVZU2/naljrf7Xm7mEq6SQYIBRECQIIgDKvKAgo4BsxhmRmcMn+HTT/30p6OO2VFHRRRFMQKKIkERRCRJzunCzfd27qqu9PtjrfXtVbvPqaruOnXqdPd6n6eeTtV1ztl77ZUDYIgKfbYEBoPBYDAYDAaDwWAIQ1dM18nZUhsMBoPBYDAYDIZ2IWNLMCekAFRC/vY2AEMxGKS7AbgHwM8AbLQtMRgMBoPBYDAYDIbkYgDAXQCqbX5N8Nc/AHieLbvBYDAYDAaDwWCIGilbgkixJ4ADY7iO1EeOAthsy24wGAwGg8FgMBiihqWhRosl/LUcw7WKAB4D8KQtu8FgMBgMBoPBYDBjMZnIAZgG8CY2FNvd5KYIoAfARQAKtvwGg8FgMBgMBoMhalgaajSYBtUrPg1AOobrdQN4HMAOW3qDwWAwGAwGg8FgxmKycSiAg2K83h8BPGrLbjAYDAaDwWAwGMxYTDaeBWAVwkdqRI3fYWZtZK9tg8FgMBgMBoPBYDBjMVk4jL9OxXCtnQBuC/h9xbbBYDAYDAaDwWAwmLGYHCwHcDB/X43heg8CeCrg99bsxmAwGAwGg8FgMJixmCDsD5qvmAc1umk3rgMwbstuMBgMBoPBYDAYzFhMNnYH0A8aaREHbrIlNxgMBoPBYDAYDIbkYwco0lflV7nFV0l9VhXAMH+9FZRquhLxjOgwGAwGg8FgMBgMixQWWWwdywF0gTqRliL6zIr3WWIYrgRwD6iJTtmW3mAwGAwGg8FgMJixmFw8n9cxBWAyos+swnU2LQDo5u/XAbgKVq9oMBgMBoPBYDAYzFhMPE5S6zgd0Wem1WdWAGQBTPDPf7QlNxgMBoPBYDAYDO1GxpagJfQDeJ4y7LIRGou+QV8FRRRvtmU3GAwGg8FgMBgM7YZFFlvDAQD2BdUsivEYNcRwzAG4FsAmW3aDwWAwGAwGg8FgxmKycSBormIXaGxGuyK1ZTYWL7clNxgMBoPBYDAYDGYsJh+78dcqXHObSgSfW1KvKoA8//7vtuQGg8FgMBgMBoPBkDwMej9PsCE3xUZdAa3PWCzDzVfM89dRAH9pYOz3RvysA7bdBoPBAADosyXoCLpm+X7rwzD7NZlPM5tTdj7nzZ6YDHDIzWOeGjtjTfH1ugA8g7/vAdX5DfDXHlCTmEaNYvZu870u5fv8MYDfw0UNJ9R79uL3VNX9Rsl082p/UgAeDnhPRa3HqwFsBbALWh/hMQFgPYANoLEdPQC2sbFcBHAlgLsxM4raBeBcAMe0eX/6AYzwunwXCyPimgGwD2g8yp78c1bRVJnXvgTgbwDGADyFmR14d+Xfx3muu9lhEvRMa/m1CjSTtB/An9kBsgEz54WuArAD0c0s9Zn95DyghV5vPTt93928T7InPQCWAFjN9LoWwArmDznmXVsBPAbgcQAb+ee5PHtSUOCvp7D86iRu4jP+YIji350QOt8blH0zwPfUz681fMY3MH1sALAZwVk51Vles5SA5z6TdYjVzM8GFA1NAxgG8BDLrXtjkCvvgpsFnWbZsYJ5cJr5y28BXBfT+pzL9yL3U+a9Fx2xl+93gmXeCv77rwDcMQ/O5zTTeYbptwvAdgDXA7i9zv/tAeCchNBwI8Mnzc+2len54gVqIL6NedVP5shT08wD/pXP3WAMzpkNfK/jTEtl/n4rP8vDSTMWewE8CzSH8CgAhwHYnf82yYwhjdoxEYJig8/OxkQof/UIRCu2p/G9V/jrFFx0L4pU1GEWqiIw6xlEbwfwRiYMMcKjYHaTypsyzAJwkpXAO0MOxnsAPDMmhpwDcOE8ZkTreK2ew2flGax4V9TZyCglqKwE63ZWNP4C4GpWIAsxG4pC61Oew+AgAMex0nSEMu6H2ZD4EjOt+/j+rwJwAzPTLW1QltK8NoV5Qhe+sTTpre8gr2c70cd7m1frdgLzvTfwuuZCZMgm/n0/8+odAG4E8GvmqXcG7FEp5NmTgjIbyK8E8KoO38sjIGfeNICfAvi8WtNyB9ZQFP4hAKeyvN8HwCEsw1IB9JFm+hBHyM0AfsP84HbUOmZ7+VnLCVGUy969DAF4PYC3ANif5WMP/77HM2Sn+dkyfL628rP/GsAlbXjGfVnhfRpcb4UpXnst57dEaCx2hRj5/QBeAeBzcEGBlPofLeseZNrYg3nQZxvItiSdz3G46E0f08wj/Az1jMXnAvggos8Sa4fu1cXPthXUePHn88DInS1eA+DDoHF1P2lBbuwP4M3sMKui/UG6MPtoknWsR1gHu0j9bSWad+jOGilPCPQBOJYVxHuZYe5kwpK0yhJcaqW8pvkhRlmp2Ob9vROvHayMvbTO81/JjFeeR993FGmoj6nPexI0oiMMN7RpHSbV95JqO8JKQJiCORXTHuWZZrrnGQNKs2H/GTaSdkS0Fn8CcD6A/dC5lJzDAbwXwAO8N/45r3fefgHgZQH72Ur6xioAHwLwLQAf4Xs7dp7QSbdi+hkWNt8H8B0A/4nWovfNrmkGwAsBfIWNkRHmCZNMc9PMA6f55wkWRlWPF8r342wo/BrAO0GRl/lwXvV6/DkB8sk/+xsA/AjA0XXuvZ3G01kAPgngl7y/I0wXco9jLB/H4OrwRaaUvOcZ4TX+JDvRECE/iBJ7Avg3NrB8HacawPsKIX+T1wYAV/D5PjTgOeea6ndggM4VxJPfHeHahDmrXx8gF6pN3NuFyoDqm2fnU14FNgTr4ayE3nuj142YX6nMzeBcAI/y832hxc86MkQettN+2cb216T3N+FBE+ycOsPjLd31lIG5QkfPns5etZezJ0hSCtIeEaUDiCoo7bTRcPt250inQZGbrSGesuWgiEkXop+xGLRpDwO4K+R9a+Ea7YhXq1WBmlNKYS9cNAugaNA/Qv7vYOUZbCcyrIxch/kTLRrkg3kyf815Z6GgvMqSutKlPJQ+QxClfDXTyvNBUcoHWLG/CJRaFAeG2Jh5FXuye5VXTep607wGWX7Wcb7/FQCWsaH4HFB68/sA3AOXtjVXrGfn1WFMv0X27P4bgmuAkwSh6xUA/gPAO3hdd/JaPoK5RwKa4Z/ngrIEnsX7OAny3EPx93oo8f9MMQ1LqUE/gNMB/BMoynAp0+ntde610sF9KHvPVG2RJqPif9v4DC0HZSicA4roXwbgfynFpF3Yix2YzwJFE/evoyf0YmYNfB6UaVBmmliq+OQx/DoTFLH4sZI5ca992lvHVaDSh0H+fpV3FipM7xJFLPHfc55cnlKKXB/v4Tpl4P2VHWh/8vSt2aZpT/B9dLNOk+W9GGfDbTe4lLWokA+QfR8B8FrmIX6WjJZzYD49xPf7EQBfU3+bnAfnM8fPJTJuiJ0ghZCzXFJ7VUYyIuiNnm8ry+1MDLwmbhwHiiruyT8/2eLnCS/IMQ20O3K8rMHf7wMFFV7OeuPeIEf0lnbq05IPfxtfpJ61W1JMYicLilE+UFP8/8UG3rc4X9d4RpjGS+p4EaOKLGpv4Ofr7MHrPa9lIcI1CHq+b9YRqp+O+PrVOuu7FbXpJklubHCSOozi1RGan+KfJ+dI+0UWRL4X6To2ig5p87OtAkUBRjxDthTiXd0csp/ak3wbKMe/1XTqvXgdNC3vBNULvX4eCK0VfN4mlOEta/Quz+E2V/hG3ylwWQVblcIjv3scMyMA47yuW0CRpZ2onw0w4v1+MyhFa/d5sCdXIXme/VHeK8nq+Cpqo7aaProiWIOngyJgwwjOGMjzHu/w6CfPvxtGsIddaO5J1GaoTAL4IRvDncQ5oOjfVl7z6RB+vJOfuxzy91KIrN0EysqS3z3Csv/gFu55D7WWW7zr6SyA89voVPiC0gvGm6TpOwD88zw9nxMBOtQ2lmn1MJ8ii8NqT/+ChYP17LDeqHTwT7f4mUfHpBf7mQx55p2S8aNl7w7mL6Iz3g8qMalr7M0VA6B0uvcrwbSNL55jJSTL3/egNoqytMFnNyokbXeaXYk9ehtC/i6pbFXlJexlQRBFhDHPa1ZiD9UNdd57MlwdhXh9Wm1u0KW8fn28r8tYiH+9jtL5opg8TJO81j/09ixpyIBSmd/J3ipBT4CSLoq0eFX14QdqI40V5Z3KsOe2gNpo9NGgGshTQWmYF6t9iipSs4aNlvP4HqQeZ5nap3HlEV/CxuWT/IwDvG/SyKCPX4fy5y4HpdfdPYd1L/H1csprO8i/Wwrg3/nrz0Ep30nCLmy0vQuUwiJrqXlLISIDQGjhYHaCHcPrsZvnAZ0ARYB2572SGqN6DcnG+P9SvNd9ikbHFa2sAvAm/uxrQbVrGxKqTKTQ+eYxfbx2IyxXV8NFfZ9guTzOSvom1PYAqLZw3eWgaOIbmT7FmSPlGOD76EZwOpOkVqcUTU0wDfbz/wrNjbITYSnzinP5OX8MqtF+KMb13htUC/cGViZ9+NGg/pAzIQ7Cpfz+gpIHso+rlT6xng2M/QF8DxRpLM7y3ktqn7o95+6AJ5OiPCMVUO3qR1lHKfOeDvLzlRWvzimelmdF/SP8vHLfhXl0PnPeOov8a5Tx1d2k/osE8J8+ReNlhNepziecAMpmOACuZK47Ansjzec2p/hlO9GF4F4wGsv4foTm9mE9bgnrRJFGGP+FLdMCXD1Co2iQ1LVI0wRJMxNvWxnx5PQ24zU5t44y9hvlJZT36xq/ViOLUsc2wkL/0Dr7cDNct6PxJvZhLi/xTN4bIARXKKY/5nkv210D0KrDo504iAX8sKKJKeXtEdrXP+uzUlIeInlvSf1NojkTmBlllOjepPIofwzRj0N5FVytrih3Er3LN7mHxQA+oetaLgClTMxVybseM2uKtXf7o2icthE3Tgelock9blTfS9Tu/DqCabY4kBWzoChIHrWRkHLAfhWUB1PoMY+Z9RJy/9MhfH6cafVcdL6eMUzQXoNkefhLIV7rIigqrWVXK47MtaBaWT+iWQg4V4WAc65/l6/jaS9iZvRpFC4LaSeoQcoBETlLGuHF7DiWe3nc48dhuo7m32H0XsLMUVkiv6e9NboNwFuVvG1GYQQbZ3Kfm7wzLBlJWxFtzSJAaeZ/8vZwvIF+uJOdHXujcS+C+XI+J5Q8/kCDZzob0fQwaPdrzNMzr8D8x26gpi/VALn10RY/+3jWy/JN6kVR6MZF1PYT0HJ8I8JrHe9mXj8rA3ml56nX+CIoTUAbE+WIDKVyCOMtY2ZK61xf2zwF3j/YIwiuwegD1WRNKyO3jOjTULXSdWUd5riHUh4nIrz+ZAgxfa+OcfZidR+tXr+gFIRiAC1UQfnWSUUPqK5l2DN8JkNoxf95LISp5JURKE2hhr3PLaK2QYCm8Z9F+IynAbjFu27ZUw60cBlXvCJI0Sp666QVi//h6MJsnQO7g9IrSop5Bhlgv1BG1pIO0s0QqAlPM/zxDRFd8xBQhN6vhRUamqqj2BeY/rZiZuOKsuKRQfRe4GuFNT76hNrzJOGGJvfnCdSmoU0j2jT8qnK8VgOMNLn+21p0JIgi9XWWm+Koqvc8RU8fKIXwsnH1tyJc3bbfEG8y4HrfA6U4tgsZdojvVM+xTe3lRMC5mOD3jAbQvfzPuJKxI57crirHSzVAFj+C2TfbWOmtfyFAHhVRm9YehRPx9gC+PhbguNukvr+qgWM8qvNZUPcwoe6ziOjTAbWT7J0NjN6XRqS/lTAz7bjgOf7HPCdPeRb6o6zXVv7+2nloHPZ63/+nZ6hrm+P/a/Faz8XM0rKglOVtEdOelCaVFX8tMX/Sds8DHk/4jbJ3IEGGeoqXbqNa8pSLY0GtmDVjFaIvINoOlZLSUFGHudWUieXqs3XoXO77D8yYfUyqKEdXGz2aaXUvf+OvQamDz1Rr0VXnfXMRlAJJOROmEJbueTQTZV8E95AJYKYVuMYvUpyfRDwHlDp0Ju/htLeWKb7/Hv57JoDeJQKo2+D3Ijy9y6dRSWHWaSIApaR+AZQ6XlDRhi7MrilAhhngvgFnXs7qFD9LP2ojmhN8/sQp0q8+cysrDwcrQTfAUYS1rFxFkW5cYY/7GBuHLwONpvk4XOpTkHCJciRBF6/9tDrL57MRGFdDl1P5mier30nziwG4FNMCqNlEmfd0KVz6mJ9aJXvqd8suq/ML9b8lNjilFbvQ7OvY2P82qMOhlgXzAXcwvT4OilzLGZkCpRnXw5SSS2m4FG6ZRbxEreEOjjallJKQg6u3fyOv/X/znjVTJpCFS5U6iiNaJyu52e/JBuFheXW+wyJAZSXfuus4pEueTJbrjfLnv5Sv/XnUH0cwV7yflfs+uPTJ5Wp9hE6nmVelAzzyUi6R4z3MevykV+23NKHpUUqd8IlJ9flv5s+7CPHNRfSxhHlnEA4FNTuUWvmq4rklpX8V+XermSZ+Auq6fHsM958DNYHbBZTOvJ6fp8x02KrDcJT3WnSWXpZrY3ztaU8WCdbWCQzMBYPqvAkd9mgDQK1HiWltJ6gsoJGO0cefD+9cFOcJfxZZvguot8N5aFweFxXkLPjy8x9ML8tb/Pw83DzbpYp3ijxZwjQojerWKjrJsi7yKlA66v9bq0Ze+iAF6VzUztHza2miqFkbU8pIWikeGe/B54qsWlTxbi7ha02DWsqG5eye2GZDUTOLEdTvaPmiAGMxqrpJeEK6DKoV0cK9BNct7nTet6URPX9OHSyZ6yO0sJGZb9JwNKhr5SvV77Qzop+fY3kI8xKF+qcscLYpo3gQbvD5CfwZItTG4WphBpXiIWtZVJ6iN/M6fgk0y6oYYAg2MsheAhqp0K+E40p1pvqUwNkGSk99FFSrWOH/H+T3SbpVlj9jJStf8v+XsqIbZQ1bVSl1cq3DQI16VvL1woRLlPcgSsNpmFnX2m4cD4qcnKyU8zwrEQPKE1llWloeIJDuBnVWe5L3eTvcfLz9QPWWh/D6ptV53q4+L+PxjAmWO+tAHen62PO5aR4ZijeBOpJOsfK1K3+fa9LRtRQuOiDzKpfxqx/U+OMYuC6iKXXWs3A1byVQt9LXM003W4ciPGEl87NzFI1klJKRVc6iijJ2RHZtYQfQFjaaH+bvx1lBfx6/1gY4bIXG9AiZrKLNpUwfKVBU4LYI9++NbPBoHjao6Nd3guhGeFv59TCfj6eUnJSU4WeCsoIOADULEsNRz6yV9RWdZ5ifvRs0V/mpDhqLYYbiy5nuDwqQfylFGxVeBzFYrgA1Ebkjpvu/HjTGQmTTgXDjXlLMn1pBH1xNmER2ynwG6jllN7COdXyL1/8r895uvn4XarMKyooeJ1Bbv7qqyeeD0j3ujUgv7wRezzxuyHN2thMpTx6W2VD8OsvTVmdlj/Pz7MZydC3T+MlwGZM55il9/LwV5RRbB+rp8CdQhsqcbLrDmQH63ct0KLWA1sPoUtMQluYZ5cvvTjbJDByeESZM+07UT5uNIo1AlLTbGhh+d6I2rUenBLfyGg9Yo4117mMVamstW71+0bv2pPe73zThnY8bB4A6BMo9S5fIoLmTW+E6hhaYQXzNM8DqYTkoKvRd1KYuTPIe+HVmYwF7+mXMvYbx56jtaLnTuwe5p3vZQ/9cz2AGqEHGL7zPmYbr7DjJ11nfwp7US0PVaSBbUJuW80alHAZ5pVvFas9ou0Pt0yjan4a6L6jhkZxVnQo2rPi43w11nD3x/xsUOV9bxxEn3uv1oPqlL8LNjtXpWf75GFFKjPzugwk6582kuf0lBl7zCdA4pZJaRzlL8jtJDd4GGvU0G6xjI0zXoOqUTIki+vWso3zmvsr6gk8ba7zf7cL84V9AaYj+GZ1CcNqrTnP9LqLrpHsKy7rxgOsV1Xrq9FmRj9/jc9Eo86mXHQin8BprOV5CeF2npOTeBir78HlqENqZhqod5q9QfExG5kx59y60pDsq/xoUvY7zfF6D9o9fmyueEcFnnANXZuHz13HFG/7L03UxRxrIRSgb40IXO5tuRW3pTB7xpKHq6QVT7BTftY3POwCKFn4PrrfEtKf37PB4w3mtXPC/FAEKk5xQ3pMoR0foeitp3CIjB/ItvqTWRmoYR9UGXoXwVL9+BNdqlCN+CRP/YYACJtgVtfn2BUUAURmLZfWZl9ahi9ep9xURTc2mFjI+w/tIwhjPXmx8jah1yHsM2q9N2QKqxXs9e9fnavw+H5Sq94B3zaJnJPq1QzuZCfYFCH4fGc8AG0dw4xMxysSo+HfUT6lYDWqsoOufxXB5fwT7Us9YDGq4MK3+9hn2/rcLK9govV7xnmadLa0Yi3uChlznlYH6hLeP/rpsAvADVkIObMHb/hJQo6WH1VqLg2M64HzI9/exMrt2nhiL98dwHznQvNZLmXamPKNf03IJrhtymKfbx2c9h4quVRId4EklqyZBGTlvbcA/6vGaZ4OiZtezd10rVjs9utyG2mZe/ycCB+KhvL/itHgKM0fE+Erfn9nQfTbmXn5zBDtgrlfOGjGq7lN7+RgoQjybhlztrlnsZT6/xXM2TWNm/dSEp9/9MWJDsdnzeZdHk11YWFgJVzM6GeCMm2BaekcDB0A9dM/zNXoxn92wus12G4u+jL0FlN0UBeo5Qno4MFHAzN4SJaUDbIErgWsIvxj+IOURCmpakI/IUImrG2oeM4tMh0HpeWF4Cep3PytFZCzJvf1Lnc3/Z88LOR2h8Vr0iGcHamca+vi5IrpxRBvZHPcE3A5QBC4p6AXlvG+sQ2s71VrKsPJvYWaDhr4mvUv9IdEGbbAKXWwNUA6eUPR+ehPX04L1NE/J10qkNup/gOCOlr0Bvz8SlHpbUIbi6jq8qFVjcaLBXulZlS9oA830g+pzJjC3Oa1zNRYPBPA+7xpBjZb0fd0GqsFdN8dnDXJ0PZOV+ydDnEIl1DaGEUPoAwk4780oozfGeD+nwc3m07JjJ2Y2TWgWr4CLdk15RtOIx4+nQZker0Xj6F4qIPrQF+J8eytqu2kGzf4tKJoZRmtNWlaAapZ9/WYawY3JtjC/PSqE5rNzMEKOYhofDrjeCBuUs+3+3U5jcVdWpLXMGUZ4Yxv9+m9Q19NOnM/rsLCxhh1yvjzzX5+L8JrpebQ+5wK4PET2lWIyFie9a9+M2vK+duJIULpzUHRRnn8r5jgKpQuubXZYxyipPYoqsuZ3RhPP3jDcmIi5vvKgGioxbh9iY+chBHesElzYwFgsRmgwbwFFnMJwiRKUedSm00ZhrGuj8UnU1o5orAPl2m9BdN1QdSdP3VkuD4pCrUgQ43k5qDmKzwSCnBElNqy7IxQKvnF5nHc/QWkGWrh/F7WpnssaeBs/iJlt+/2xHlVQA4rZYB9QCtcbmvSQtWIsamfEKPMCvU5aOf4Doq0lXAuaHTkVwk93tslYTIGiNg+oNdBpJ1MeXTwEaoZ0dMRKgzYW3qGUmqqiJb0Xm9Va/QmtpSXHpYyGNelox3zgDBstfjfNiQCPeTP1SHuCOnDrLts7vM/XUd/fojbNfK6RiqCIxQmg7Iut3hmZDHHu/AFUyzkXvJ1p3v/MKe/nCeYp74yAP4WVAbwbtSMgHgDVAg5569pM2l+7jMXDmI9pp07JM26DnE8PsTNwbQfP59/nEJGJC1FEOfdSzuttao8nUBtN+miE992H5KMLlIl1D4IziopwKZrtNhaLqB1z8QdEl0rfjH75NvWsI+rs+hHPw7WgacRotrIn/CX8uynUdtPJwnXREbTaiKBXfc4oGyuPsFK3jYVXqwJ2AyjNrJs/d09etK/U8ZDXKzyerfe2kWI3DGpAUo8ASx6DKUbo4Sl5jKvAitqjAYxpNa9dVB6mrLeuXYr2tvFL3tfpouoTQSlIsmYicHSTGVmT6wF8Cq0PPB3kcxHU5Oda9hj+K99XTwAT0Z1AX8Pn7F/5M3cqGqyoPdDOAWlQIg2hJpQBL8rkRkWbzZyLJ5neqwF8JOoumP1KcC6BaxQkjZTW8jNkAZzEHvD3gzr2tYIXgDqvng3XGCqjaFuaFLWjkcsuoHqYvdUa9LPCmGE66YHrpnk1KBV3to2kGhXDT7PSK7x2ByjaeYhSfrNwzVS0gbMvKOL0fiQblRiUUWlEVQI1CDmZ16ei5Kd0tRVHyTNRfybarqBO5yd6SmAfKxbS2Vj0gl+AunLe2EAuzgaaN16l+NEZfDakTlKa3w16zqF3YfaRo+WgaOrTec2WKn6eVj9PMV84nw3qZp8tFaIfjIe8/7/YiZLnM/kdUKaGOFumUdsgK27sAcp6OkedeZHZuhuybwBtYOfkpzt8PsttNNRaRRQ6pAREKkrmdzH99ik+q3W1Hv6fuaKAZEJ3nz0A5Nzf05NHeaWvrYrpvkS+5dT6D0b02c3sxTXsuFnFZ3eS9aCi0g3vBDWqu2k2Fz8e0Q6dn00a6jeZiS/vMNG9BbXzGaOI3MmcrKDn/ladezlTeQW013UU0daMilD6Wh3vxSeUV2JDhNcfQfBsmoMTxIg+7J0LiWBtUOs3zN9fiLk3lJkLjgbwO9R6lKW2SfZVZjbmQakZzRjxr+D/1RGhzd517mGDqNMIiyxqZUtHTfyhuTIEXL7/EubWECDHBtEdmDnQWDdx8ufR6YwFf9Zso8ii77T5mHrWHZhZh1WEa0DzYeUAaSfEUD4crm5V191NYmaq0N2oHciunYtrYrjnZiIXt8akBGkDVNfwCb2WFC8tsgzzoXnSfuzk0SUNOxR96IjilxGcZt4OrGJ56KeJBdX/bFRntFnl/wJFaxLFfgIuu2mjWouTYuRfzYxKaoR6kUXdvOidTRpNS+BS2PymGLrm2p+jeQ87JhfL+ewk9gHVZWpZl8fMiNZHsLjwSaX36DMxjOAssHZFFosBuu0diL8m/wLMbII0gtpI9BlsyDbt6XwhE520444D0iXyp6yYbu8woe2BaIt6qyzw9Sy8gvIK1GuSsC7kXqLyjIknRtb86jreiz2VYhrl+qS9Z6rw4UrKyIwcXPpVylOA18Glfw2BIopfQrgnuV1C8xugNLEC36+00K6qZ8jxvj2rif2TQbxAbd3kUm9d9vd+14NkIa2M335FW2Veg7L6e6963jNA6fhdAQZP2DlcCeC9oCZQz4AbTQGmh83MU3v5vraGfF4XZheZ0t7zFaB6xSGl8ElWSI96jn5QtOizoBqKOLyrABX3f5k9mavhInP67E+oZznR+xwZN5DEcTrtwrRaG7BxM6h+7lbrJyM4gqIWmie9jA3uLkVDSxR9iMP2+6DGOptjetYtAP4vKO1Rzq6UXgC1mSjLQY2jgOaiNAeyct2raK4AirLm+MytYVn4RZBHPi5ofSBOVAMcMQA1APo5atOOK4oeS0oedjE/SYPGAnyMlVODIW7sAopmv1Y5yLqYv1U8fbZvEa3LxgBdQfPBrJYbzSgfa0Ch2wmlMMaBLCi95eqEGAbP8BhnK5hSAlinqMjMlWlQOmHYuhzkbSoCjJZWUFb3V+9e1sBF+rRiEQUy3jMVQN2ZtibkoJ0FV8sm+6bPhswffZI9U3+L+f4qAH7JAnqTWsusR9eifJ2E5uoMH4cb3Ludr5PDzDmEr+M1EsUuSUh5ayAzwPo8YzLnGdC7sUL9XbjGFqU6ytYaUF3eO+DmG2kekGbjqIcZd56Ny4pnMHW1eLZfC+A5cOm8GbhZf2mQZxV8tj7egf2SofFfgIvmaN6W4vMkxvcrMTPCuwSLD9oJ86hnRGZQO39RK/ZBjo5DAbxa/V7ms2W8c/MYKD35ipif9WGmkfvVPZbVOdXy8Y1oPgPlHO+9KaZ//7xdCkoPLS0i+upSfP1YlmMnKd1jUvHHnOKfFeYrFVDzpa8B+HGAvmIwxIFXgiLn6+AcXCWltw0tsnMNJe8nUZuFJKVdUlqYmo2xeDgoPSXtKVLtRhGUuqC9/HGi2zOK9o7w2cveZwlz7WUF4OoQ46KbCftgJSC1ME9HZMzLva0ARai2BAhlgFLV9laHrztCZ4IoAxlFDzck6KC9EC5CJB4qefZtbExNsWL1qw7e569ALcp954ePQ1khaMZYvIa/17UpRc8Qeh6oKcORCWWURWUwDQf8bQK1Xv0ppTi9FhRhPKvO5x8D8ma+Gy69ZBIuktPrOZ/61TUqqB1m3Yqh2Ady9u3hGbKan/byGf85oh1uPlv8hB0cJe9efblzNGhG3WKHVnDyITKggPDIvpYdJ4McomXP2Cyp87ERlCFxT8zPKUbItXzuRBbq55pWZ2slGrehlzN1ClyWhMjhAU9WXwMqIxhZZPQl5+8MUDnQyaAUPkkz7fLWSjt30qDshE/w/6JDepxhcePNoDrmPiVnR+Ac5wX1eyC5tZftgHRs7lHP7gc9KiJnmlFCjud/HoBrftBujIM8pdd7Clyc0F7Y/VgARYWMJ+QqShlKIXymYRWU3rdXiOKfRuMGE7PZA4AaGIQx+iPUIasGKHhzxXTAs+Qxy0LbNmJ3uDbH43CdYqVIXKLwfwal13USU6COgtcxnU0qJUgUTvnd3k3uzSX8fVDznDFlBO0F4OuorZVKhzgm4lays4qeL2BD5R+KzktwYwLEoJKGPsNsBH8bFA3zu/O+AtTm/rVwqZ/CO3PKSC2DIs8ApRDewmeqhGia3KRA6cUHeby+BNfcRpog/LaDtCo8bAIUPdrkKZ/AzHrf07yfxxa5sbhG0e60JzOynkGJgJ+li+ioJ+fziqffD0ptjxv6LPw3qB4riNa1jnAC6nfNroAatj1dPeekMnQ2Kv75bVBDm8UCzZM/xMbe/rw+PXBRh17PKaEbzt3Ke/XDAPlhMMSB14LqMvfj8z7CcqSidPDb6/DEhY6lnl6ga9UFoiM0NBb7Qfnp4/zeuKzuAVDaSScLkbXgOVp5JqIIV2tmXPb2YQwugtYdwGifBYpaSTSrN8QIjUJ5K6M2Ddg3BPWMqa4Awd6qEqTT8YYRTx1VMzgVwNPUmmc9T82e/Aw/Ssj9/gVuZlmft09lta9r0Vzr+Ss95Ul3fp1WTHcA5OH/AL/2CXA4lDuwHiVlAI6DavTex0b1o/y3IVY20965qLJhV+Kv54O6cw7BRfHeB1dXVwZFmnNw3c8GmZ6LcPMLfwIabn2nR/etYBdQqnSvem7thKmq+/slOlfzpxXIq+DS3rvV3/zo2LMxs9HNYsVqdvQUvLNd8uh3Q4isWKUcRT3efqThUnz/rhxLccJX4C4EZTjov2U8efnCJnjZqYquukJk+0aEl2EsVJRBKfefAWVGrGRe1aX4tzRMk7nIerTWFaykf9uOpqFDOAPUsXed4omi+yxjPnYjKJtmO5yDP7dI1meA9VTfBswo2TABlXXVyFh8KSvFOSW848rtfQAzvcWdync/0WOSUULXkY2DcvwfqHOt16i/VRVzLwUYoq0S00NKKMNTFA6Am8GiDd4olNyK+ipzaLZg5tiOTuFkVqBKStnwm3L8KgFKRkbdzw1wbejlfou8b/1K6XxVE5+7GVSHojuNaroZ8dZlT1Yevsifv1+H10WfkV5Woh8D8D1Qx7S74cagSN2uOGeE1vO8DllQrdeXQSly74GLOhdZEGUCnFBFdWYuAvAmdo71eAZ82Nlo1ulzJGZmZXSDIiY9fP/XoDaLo9P4qeL9RcVj9LMPIRkdd5OAs1m57/bkuh7l86iSK/Dk+OlwUbheJY+k8VKGedmvE/K83wON2ZE5vEHneh0oA6SrwboJjXWr/5+CSx2/Gq4MY7GgH9SQ5j/Y4bQNLpI4wedwShmLet0vB3VTvtTTcQyGuHAUqGfCYUyjm5WevVPR6ZcA/B4uk0j432JZo+eiNhsgpfSDMsvgpo3F41j562flKId4wrSjqO0GKsKr2oFF7QXVc+kubFEZQ76A28FCfbTO//6TEnA69bMcIWOW+/uHet5+7z1PZ4VN7iOllLpWobv4SS3KjgQdtH2VUqH3Tu/FXzzjLE5oZU/27e+sYE0o48efy7kLG8LN4FegKNi0ZwhJXe0EG0pCFz0AXgzyNl8AGgq7pIPrI2NE0my8ptjI/TZoFuY16v1lZST2MD1m4EYHrAalnr4JLto+xeuxCm524hTT9jaQt77AxuXblHGk22m3iioo1a6onAeCrWrvb+igQhzUgfdadXbEQC94a1KE1S0KXuTRqnbcCS99Ci7l2cfL1VmUjsDTqK3lvRqUnRA3guotN8E115pCbUdO7VSQeYz1FKYutUbCN8eUU+z36Pws37jxRcXHUqBIDDwHxDLeG90E7K+gGsWbWnBwGQyt4qNKNgg/TCkZOMn6y0UgJ/Eg0/JiOec9oJ4S69WZ1no3FG+daPZD/wTn5Za5JBNofY6ezPIowM34GFfGwQjimZlVD6JIvUXdq8yravX5RSGUuYhFpSD+G2ZGB0XgvYIJvd1zLmW23FtCjDgAuIzfp+cs6ZloUazPTrj5V89NyEHbFc3NidwjYQxCokzVkJcYj4VZ3PtBcLMcJ1A7k3AKM2cJFj1eshNUD3O497kDdehuNgibs6hn+OUR3AzjeaBB2FMBazWhvt+G2rmJY3DzWIWf6b/L5/0S1KE0CDvUGkl3ZD0Lspk5i2AjuOjd+xhq52+NoLnGRnHj5aidHyv3u0M9x11ors42SjQzx+2eGM4ylHx6BMFz9DTdfND7DHEc9MHNZKsqZ5JP88ckiDaW8Zkte/xrWtH7RtDorTC8UL13S521m+8ImrM4qniX/P6N7Cy8QPFrabg1HSIv9HxFifL+wNPd+hN4Pn8DSkGWs7QrnwNxAC5r8TXIMmxfuF4XcUZXF+ucxT7Q6Kdt6pn1TGmZ5XsGXARxF+9sTKH9cxbHMXM26dWIbm5to3K0d7Njx5/P7s+d/EGzH7oraGZREbXe374IPEV6tqAIPt2l7wbEO5MuCBIhO0AxlVJEhz4VogRvBKUK+dE5id4cimhnGYZhgBX5Dd7vq0oJfzooYtKOtGTpqjoIN6/wkYQwpPVNvi9pDTemmYk2q4w93sT77mLnxieYAfeBohfr1DV1xNvPEFgKKkI/HtSx9TugCOh4CN3FrXRs4Gc4m+9daoR1/fLygLMzAIrkZFlZyLISLt2Of8lezVtiUKozip+l4Vray/PsQLKi9oKdnryoeLxT6CmJ3RWHQnhaIcKzLCMizlc8aUqtx4SSrZtQm4IKxbeX8v1q+ih667oF8c1UbJY2lrCSs5RpQ1q8i6O1UTrZanU2Mh6fEVq7EQsTskY97CwaApXa7M5GtHQhD9MPK2rthbekeE9eBIrG/kDRYdJwGp+Z80Hp11JDPunx97liQulsfwDNCM3AmvtEDZ1C2QPgc6yXSk2i7ON2ltPPAJWZ3ACXFaZTz9OIZyZ0KuQsRlVCFqaT78u0/zrUjguSMrYM6159rL9e36yxeDwbjDISIc2WcRSLmfMUGHgG6K8TYCyK4ncMXHe4qBQTPYakoAzAe1hZDvMWnAg3K62dyIBSDMM8s8+D8x5mFIHKuIsoakt3KIF+HZJTN/KsJt7zJDqXgloPT7HS18iDtQ4zu4SF4W5mwBlQivQ6JRS7mLZTHmPKMJOXmqh9+LUfqOD8FwhPmYsTT4Ca1dwLKpbfVf1NuoQNKAUhpZTUXT2m3Q9q2nUXyKN7Rwz3v059r2cnSXpemQ3iJxNKq0+wAtsDVy+dVQK3B8kconxvwO+iMBSzTG/HglK6z1TOijG4JkpCj/3K8XFrHaNJZnumUVvnLPf9BO9HkrCFnV+96pm1stXDf8sFKOldqHX6aWNRWsWnAfxsgSrZZcWThlmvO4Vfy+C6kfsGonRp7kGt0zqr5P8KAOeC0vv+pNY7aVHafUGBgHZ3496gHDyG9hld/w4q5ygpx5Fvb/wZ1FdA62a9is/FVa/Y650rrRdFDemBsDvI6f0q1M58LsNF1QHXqOoSULO5pozFo9hzpD1D0xEZi0EGYkpZ+JeH/E/cnRMPBKW7TMEN7y5HwGBS6pl058874Vp2BzG3Z8X47LeychuEfVDbXCethEU6ImNWFJY+NiCSgoOaeM+jCWWuk6xgNTIW185ij6qgLrWvBqU3/CtcBE17urqYNnR9UAHk9RtgJnU8v14EV3we5MiIo8lWP/O+baBuqSVQJOfp/Gy6DmLac6RNKSVW7nUTgO+CvJ9xtefeM0BBlJoNMRY3J9SxsYUNlLV8z5UAR1s3ktmQ4ADQIOgi09Eon7mdTSolksUivHUI5JxbyzL5JNTWkY0reqt4TotNzD8fDLnWKr5eAc5x6cu3TUhehCivHDbpED4hs4unA3SJNQG6hZxp4VVXJtTQaRVVJa+XKqUSStmuKH1H14GmPAUcoIiipPuVQb0uNrD+sCGB61dE7WiYMtNJ0MzgudJmGi6lz9Aeg0uig19kQ1HrB+II6Wf6/CnI4bvT08N7AhxNcUDOl1x3V1DUbwNad4BmmaaHQA1K14Mcx/vAOQYlxTbnPXsW5Hi8HF6wKNOEUpwNsIKj8m51eTcJkMf9nhADK25j8QjP+JH22lERVkYx0nHUj+Y8Wx2EOPLfb6mz3wfyGkjaU0ntTVQ0MqSU7l8khEFlWLlqhNEEM9lmBOGyWSgd+pk/w0rph5lJ9XjCUwTyOFy65gAz9YLycJ3EDO4i0JzGHZ7h2W70BCjHXwClZXwMFFkfVPczyUIpB5e2L+ldGVBK76cBfB/xznFaG+Lc0o6e8YTS6SRcfbbmkzoNNYf2eGNbxRrQnM0hRd+9Skinm6A/qcGTmWD9ygDUtDnG75d12Mz7Lg1rfg9q5lBP6RKa8BsIiUzenlAa8b3xJcxMKQ2SlSW1PrK++rPkuTfCZUEsJAyyEyxoDuW4MiCnldzT6yhOBamFzCpeL2v3MuZ7n0TyGtxkPVrQjr8SWs8g02VWA2bXtQViKJ7OhmJOyVyhN8msuA/Af2FmdkRFyePeGGXJJJ+tpcpp8TQA74Wb59wK+uHKoPzxXyJ/UiEGbBnAxQgI2IUtzh5882XPgxTlDJKqur4Mhi6jtguhLxjixnH8VbrDRfn8056y8xjq1zAdh5ndK9uFxwDcFvK3VaDGHIN8PxlPGES1Tt1M8A+AogzZBAjtLjSXTtKD5KKZFOFcCzR9EaipzGmgJiUHeAJzOkAYL1V8QBj+QaCakrWg4c7/iHGN8t5ayJ7fCJoX+SlQU57lTP89AYax1K39A8BX2VAsxLzXS1moDqA2myPtKcpJhKTMVj261T/76UZJcsisVQ6FPszdwVf2jPsgh8mEOkOr1d7eCEqlHGvw+XrNtfNHp7gmEX5UURuLYvxN11GopDtxD5/bVIDTbOsCVbYzqE1VFsfsUu89/gxonQmSgasf9fnIClBDvntBUZ2kOaJ0d8wedW6HQU1PWuVd8rUHhnbq55/hfavAdWHvh6tZfATAO0Hd6RHiHKlgZm1/O6Fn2Vb4XC2Bm90dBV/s85w7EvlPo7bplH7eIvO7ryDAQRgmwE4EzW2aUocLiLY+JKWU0ml1navqLECcWAvgaL4nPRw6qrrFgsdY7q1joK0A1alsQTxRxZsQ3tFvT9Smt8ledkVo1Et9xBJQ5zIgGd7dCprzsu+C5KKZc9TqHt7MBtXHQZHBv6nzMwVX7zLBxqFOcRpSTHwVG4yfAnBIh9Zr2jOgbwU19PkCK+NTnkKgG4BdA0p9+e8OGIricJlQfKuCmdGXJQml0yVMC11wKTvwaKWKZLbln1SGouZns6G5ohLk0mwk7TkiRH5Mw2UzpPjnP4Hqcy5rcK0JZXznAui+G/GnaM1mnaohfEtSLcPWfcCjnSAn2t5YuGMflsJlKlVC9BqtazwMalrzYSWT4dFMwduLg0Ddeg9O2LP3YKaTT3jkSnXO5vqSDrIF1M6mNkSHQwB8COSMngiQr1VQSue3QU2G5MyHGfba4dRu6Eh2mmmkyLpQFHpC0ZM9VXYEDcI5yXyeWQT1BvnPMDskzKv8HH6YAi/weMSGYgUzm14A5N27JyHEuJwNxqc8BTATkQApec9fr/vkalC+8d2obVrRLtyHYI9sihV4ETK6+15XHaE7F2LPs1J0TYIYVBnN1SAMJpjJFmdJm0HIoXGEtQgqkr4ElEJ9Pqhdue4e2s/vk2ijtK/u8hj7sWwwfr6OMykuoxEgL+WNvE5rQZkYMoqjn8/HF0Fd8DrZmCml7lvS6f1skT5E26kzKvQqGigFGIuiEJQTeMaWeGdJy7spNHY45kIcPFV1tqQJSb+SzdI0aieou/AlTZzXPN9Tqo4S1Z9QXiZpukLbvvFXqSOr+1FbM6R5vPxutwWqaI+yjOqGq7WWMh+J2Ov0zDFQq/1vsSJ5CxuCR3i0oel6A8ipfCLI6X5Hgp5fnk9SrUus44rx2CpPyaC2EZchWiwDRb+eD3Ler1LOCtEp+kE9Ar6s/s8vuejjc6Bliz/9oV2Y4Gvn4LJBhho4uJqF3L/WSfQaSGNBkQ0VdgZ9D8CFs73YFrguWWEz2Vp5yXwvPdtoBBSRSAp+zUxV7lOGw09F8Pz+3KLHUNtp0cdbUTsLJor192euyfydYQDn1LmXv6D9cx5l9kueFa+kRD/WAjhPnYuC+irzcvKesElSGkqfYiB6npiet7WVjbt2CLkBAHuBPNOPhfCWsYDfyTpf5TlLGimxrcxZbBangyKn+v7f553n2UZmopiz2APqSih7PBmyrn9LAF0Grc++rJiOws2B0vPinmC6PSLme71hlvxdZncJDY/Pgj/78tb/3bB3rftA9YmDaD6VXM8Z26jOhp69VYp5jZvhPatANf5VUAMe/1yP8ff7NpCpk+rrlMdvPq/evzLAIJoPCJqzKPNeNa8d8WhpM9w8uF8x39Z4H8sKPTvWX8eqovl3htxftgPnswpqJijPOQUKCozBzQFv5bVDffaHEL/zeCHPWcyBUuv1nGNNZ/L9N9Hc3ML9PF6nZ0G3a86iyC//mnm4GYdRvEr8mRO8Nvql5cnFCJ/5XOMBCVKwsqhfBBklykqRvTVBRLkUrsuX9gj3ILo5k4K7Ub8pynOVBzDKFrtd3p5mmGneH/L+9cyI2o0C38uNSFa9zHZeG7+Oqss7KynQTJ87EW9Dk0Z4gVLMJac/y0aX1JoOsBLQjvQrYVKvAEUZX8FMaq0yqiWaJPQuhl6Oz8F7QE0TtiMZHRp/x/t/Dn+9HtRF8akAHhcn8nD1Vv64HUmtz7GHcU823juFoPU5ivmNH6VLK0fBNjQ/OzROjMM1ifKjej1NGEPTHl/x+csYn90hxS+vYqF/HZ+LZmluEm4OmciVXrgMhAp//irEFyVvhvfsoXhFLkC25tiIDCsbeNDTgXR3Rfk83WJ+mL8uhGY3BdR2P80og0ac46uYhv4TlNWxQzl2yqAOu6uZ761RPKcbM6PYGQAngKKTN3l/68R63g6qdethHrmCv0oPiVYdpWO8JlNsvI7CEAUOAvBmAC+Fi44vV3xMnMcXgGYZNzMb1rdzumJ6Fi3XJuAa8wxF4JzTDTm76+iyVwC4mvWVR5s1FnXr6FPh2qmmAm6iEsFh0nN8qupeLksIUT5DMUDdYjnKNu1F3kyZIxjWlbAP1B1yFNFHqbqUMine6vsRPl/xZXCtd9stzAaRrBRUodvb4erU0mods97hP4KNxU7CHzNxlrpn6T4qCqwUek8jfHxLFBCF7BJQXdXpoCGxz1dK2VJF6xn1P30AzgB5Tb/T4bWVlvpFUBbCbcwfHkRyUiOfgJtVqGv/uuCaZaVZCD+WsLP2QtTW5o2rM1ZhY+wWJG/+n9DpiLp/v0alEcKigpLSKk7MLaD0vmtAdTl/n6NT4U5Qs4glnhMJSi94OYBvJGiNDwNFRfUoErl3adbyUB1j8Va4rsySjlgJuMZ6VqQWUkfUaaVEZgKU2BTT73+DahQLAY6PB0Bpa4cpXamM2v4FQl8Z1iufYvnZ6ZmDI2xMTJn9NW/QD+A1AN6l6GpQGT7Ca28B9RR4oMnPzXo8OS5jMSjNvzeie0h7nz/NtC5dWO8ElSn8FjNnAoeOKPSNxR4WGjm4WUO+sRhV97lswKL9sQPKXpiisjrgfqNMmdB5w/XSb08A1U6MhTD3uV5be9CySlG/t47helRMeyP38+cEMq0xVsCXwdV5ZNQBS/HBPArA/3T4Xv2h8Eep85b1HD8D7JC4LQbFSJSOrbxGW0BRgCNRW9MIxUTFwbQGwJtAHup/dHBtfd7xeAJpdTMrurvDzYmV9dwON7j82QiebdsppDFzpqx0dYV6jvuQrMi9oBvUhW+Sle+dvM6SGtTIYNwFtVkfBXZATfL3dzMPuol5ZKu0dxOAY1DbEEn4h8i9cxJmLD6PnUqjSmmcZmNR1u6uOv+/HcCToDQ0yRoqe/JxLWju63cV3S2Ehjf9qG10VWJesQvT6VOgaOJXPQeI36zlH6CUwHWgdN9+JVvEcO9RxulpoGyhCwKMzzixmxmKiYd/1t4OGigv9Cp1ihNwTcA2geYzPzCL6/R6en0cNaYV7+zJ93fwmWi1QWJeGcF5uGzB+0CBgIvr6Pihju6MYrIipA4KMUgqEVrdQYbK40hOuP4kzOyc1K82IsoRGmOg4tKgNSoBOJt/XoJwD2irxqK+l3oCdl/EM+cxw7Rwc0IZ2U1w3TlLnicnDUpreS6oU1enGjb5UcUXwNXdQNH3KH8vRu4vY7g3X0G4lNf0A6DueZPqjKU8fpTmtT22w8bifMAoC4nnqzWU9N5xNszXAzgFwNeQnHl6L2deMw3nQQ5Kp7k9oeu+CTSPU4Z9j4Kcj8P8PI1qbTeEGIsTcJH/KEeG/A2UZrhSKfA5T848h/+ehFESe8DV2ATJQslKaFTWchsbi74DaAzkDCwC+CdlLC6Uzqj+2LIMG3zbWRf5d1DUQSOsq+c3+P8/AJd6qdOYtQK6B2gm3l+ZL3UqwhjWzKsLyRzFsxihz9qrQOmn65i+NrPcErqUutz/AvDDWV5Huj3HMTJDG6TCo6ZYt78TNIv5cVDkuxUMK2NRatt3RKFQajwd5E0Le0BExDRTAd//pQMMM0ixPgCUWpGC847ptSpEZCyKkXwlKxdBh2UVKMopDHgStalZc0VZMUeNbXUE7DNBtU1xMNMsqBZsZ0IZ2R9BefMrAtZD6HktKJLXKWPR39uXeQqC3OcE01aKPVBxRph0ysNmUOeyR0AF5dJ1WGYQyfgBYbKHJEy4J2EOaNA5vxm1zXCKqE2hBqhb4dmgtLNOp9AuBzUfkdFKEjkc9Gj3gQ7IjGZxL4AfzyPF7G9sJMjYgJInI4ssB4+F67DaSZyqjDztBNEOhftBUax6+D1/VrfHuytKkTuar3XfAlLEJ9R52qx0vjsA/Adm1hU2Uup/zrRxJly2VMaTRcLHjwTVC34cnetRMd6ETmhIBl4Jaqa0t6KlVYr2lvL3X2e6mu0e9qrP8mvD47RDRkFZIk8kdSP8hXkGXGF+HN6dihJGV3VwHTSBnQUXgal694sIiUmY6c8QHFGtAHgRyFun299HbUho794GhNfZHccHM66c7ksTzMCuhiue7goRNN0gj9hzOnSP2nA5m2kpF0DD/cpxcVfMSpFvmDwE8g7eq+5TR8C1kD9E8aquBNBEUmuabgB5Kyc9ZWk31Eae3wxKRewk+kBRzhco2dCt1lZGPBTZELgroWt+QB2lJAp0R0zzj4FSW6V1vG80iex7HchB1knsDor2CV3oWc16jW9m+qgnry9n5axbOXy0YyLF8vetEe9fp6Gd3SvhGrF8sY6hWG8dN4Cir6LDleCapk3CjaQQOnoZqFY9CXqvPkc9MCQJJ4G66B6sHEI9cAEcqa39NsjBPBdjX9fBx5U5MBZgBzTT+CwxxmIXKHIUV2toaWVf5q+dFPyitC4DzQXKehtZgPNwZyNeg3p1ec/z9qk3IoLWDLKk7mVbEwpQXJGHqxJ8bjbBpQp0BdDRGCi183gAL2E6ynXgPkXBeTEbB90e7VWUYjSK4HToTuBiuIYr/eosai/g/sqpswSGMNzHCvG44iUppWAXmBYOQ3w1yWFYzveQguvOllKGrji2JpCcebxBCEojirJGqoDooyCPg1KV9GdXPPlzGlz6fSewB4B/BnCoWoec56wp8+/vDzCMgvi4dHidVPI+i9pI5SvhUnQXAqQLqPDVrQA+CBqREYZGesdlzLen1V7k1fpmFb8BKGL7og49v05DrYYY0YbO4igA71YySeapCi8dU/Ltf7PDYi7QjTbjMhbTnh4GUKro+HwxFpewJa+t7LBXq5iGq5lKs8K9e8BCxo1TQPOE5Dmz6qu0to2CoQiBXIngsLPsy74eo94YkfchpZh5H6hWIQtqkx2EbgAno7aLWqvXl2G/8r3Mj6yC0oM2JJyZfUgJmDvgcsRH+SzJyIeXg2YzNlufEYUzIqvo7IugaHlRMSNp6JCCS4HeBBq67BvAncAP1DkrKQNBzkKKFdusMnQNwWd8CuR57VZ726fOfrdax7NAae9xCUr/968F1awClGo0qnhvXj3TZkWrScTkPKSX3zHPHeQ1H1U0o6PmXwZ1em6nU7krhB8eBmputdbTU8COpCeYjsaVLNP1oQMB1/oC/1+fZzh0KaNiDagpy3M7sC+H8Zp/CuTMjwpDShdbiWg6j1/O99mrzvQqT8cUQ/xkAO9FbUOzuJx+fSG/NzmSDBzOtHEa/yzzE7OsM/YyrTwKykR6cpafvxcotfxkUDbNg+xAyXnyKMV/S/F79+P/PQDU2+XkOT5fTjkthpS8S7SzQhseqyIyBGZzXREKGcU0yh1ahwNAeffrYrieGKFh9R8Vvo+VyliLkpmm1bqLQH0K4XNpDmEGGxUxTytvjt4DMbgeRDK7HGpI63Aw49imFJKy2ud9QWk3L/aM77A9iSKdUerSXsvMUFrhy72JMN8G1/b8+8pwjCpqkZmjUjmkaGRSfVa/4h07Ed6owFDr1LsCrn6rBDckHsqgBKgu+QOgCE6UWAYXwQ7i77uAWvS/EbVpOTKzbVoJ2Qorpds9wWtoDfeAGo9Arb/eC3HWHMiG+pEN+FkrqHq8DKCu4G8FNbYQXjmI2pEkkpb+dbjIg47yBsmUu0AjfIRfy4zZbs+4PJT5+N5NyPYocTAo/fcDfEaOiHiNRQmf6znSOuQTIEffpUqv0I6TYbhaZDEK3qb2bcyO4aJHD2g8xuHqd2VlK/TCRavX87n4Hdz862ZeD4JKXX4Lmtu8t5KDG/klMnFvfo+MmXgQlLJ/UwAfXDQ4FZSKIvP22vma4OuMqw28FhSFOTbGZ+4DpXq+HdTC//6Ynr/KXpF69R/vY4U4iNijuL60cc/z9z+qcy8fZKYf1fVL/DkT6jPl86dYOCYdXSCv7w6+74e89Zn29uwqRF+nEaSYiILzZmZqPu3k1feP8dfHAew6B8VnH1AHr/eidmZnM2tX77PfzIqFdPKqKpqR12Uh96yxO59pifIWA+gtz/uYJOxQz+vTkuzfGxqsr4+38f9JKpimg63e2vwClD6NNhoEUMbev7KzyqfPKiuQeUUDD8ClIYpyESduaIK/3Yr5iZNBXvqioj3Zh4LHr68F1bFDKXG9TRoVs+Vth/F5rwbcVxlukHwBVKu4apbX+icl+x9XPKfqyb0NoEyNOLAHqF7rCnX9nUx/56D5DKyVHu8seOdMnm9VhPd+ElzH3jG4ebRPKR4k93MPKLXYzmd02IedIHqt82ofhA4+ksB738Pj/9OebCp6fy8G6FrN6r/6M8ohenaxjtG5Fc2l5T83ZA+0rLsD4c1FEwHdseoQOO9vuyGMTnc7PBbUjXUM7S/0lPlXS0FRjGzM655nhlWvRvAsvj9Ju5tG9F70NAugbhb+YTgB0Rb4pz0FtACXbrgB1NI86ajyfV7Ezobd1F6llOHbzT8fz0xiLajrZBQIikKOs5Lxarg601G4eUJa6Zco+vcQPNy86Cnl4pnvB0Uk3wXgHXyenuS1qDS5dvUiqC+DS8/oDbinLCgKbrOywvm6v76XskPwdNR2w5VzKHW2WV7/LuZP16szGgWWwEUQ+thQfCOfC6mjLXh0Kt/fD0oH1CMzLLocHf7ITsM3gKI9k2yIrYMbqTHJPOZYkGf9PADXNXEWK3PkbaewM+oF/LPoC3nlKBDnyGYA34GLPDSLy/g6+7CDSdcOleBGTa0DdfzcCIpmtHN0y7+AUrL72EgvMi88kp8/DeDCCK4j+zI4h3ULw5V8Tv9FOS/LcBFEGdPUC0rrOwXA35HsOmRDPFipzl3Rk/9ivGVQm20iOrXoJ0ub0P8li02uI+UZvp4utYwZdf0+JcsGFuMmXYhaj2K7I2vy2qK8XZ14bWJv4k4WjBtjev73qLUfqONdEW/uKJx3Per1nwAN5g7CWuUl1F6YKK4v9DauaOAPiGY8SFzYC9Q6XEd+ppVXbMTzVP0DlIu/R4ABPdtaQd+pcgArb0+h1pu807sP/f3XA+ivkdf6YNA8Rv3MT7BSB4+uGzmg/C5g+zJNhkVE5Rx8FI2jSos1shiGo+Ei4UKf+rML6ppj7EA6LwLnXdBcwTWgjIUnvPupgiI7ehC9/P0z6Hw97UKPXOwFanQia655f4n3Ru/JXQBe06Z7eTZqI4oT6lwMY2ZE4RLFbzKzvNZxoDQzLZvyylgseH/7bgjfaFZ5zCA4Wt/NzrvhBnrLnexoaRQRDIssyleJ/B0U8d6t5v3wIzRaNpaUfPoOajMG7HzOHfM5sniMostxj+YLSnaPBpx/zafqvYL+R+TNKL8mmrBLSmguE3LBRRb3nwODnSu053gpb76kpk2j/XWLo3AjAwZZOc4pD1u7uyJNsBcXykOhvZkvVd9Psycj6mirRGh6QRGye0Pe9wJQTZG+n1ZTv8Z5zWU4sK5juA+tDyWNC92g9NMLAJyhfjfOa5tlupaosNTGfhqULnUZKD112xxpXtPpP4EifSd7HrQe5WmTwbODynP2Q75fPWs07F5yoBSjNygaHeXP3I09yWk2JO9Dc9298p7C9nHluZtW91VUPKPCzDUPQzPYhY3EvwD4CaiWVSLNE5iZWZFipfdo/t/nsBPn93C1a7Pld4IsO0teA4pgyj6n1X0M8Z53K8fFdXApeYb2QfjZelC20RpW3Pp4L4aU/ACo6cN72TjQXYxbwcHMT8/lzy8rncHPShHczkauNCkpzfKa14NmY76Fn1nqpNKKz5V4HTKgkpn1LMd/CTdyqtmOhiXvHvcDpX4fDcoAEHk4jNpIiciSg0BZHY/w9WcL0SfadZ42g+rg92HZsEzJlhKf9arSAc9kPeR2O4IGlj/SwEoCFKJ3+tlGk3AZiQNonAW3DS67pp/fn+NXUckpwRTLMPkf4T0bmV8K0uj8nOJYsBHRRa4avcY9q3oKLuJUQvujidMhXoJhVqra/fz/U4d5LweN0xCP3A7vHqOqWdR1QJ+rQxff8dZrLILrF5gGprx7KbAiO18gUY4eUNRjRNFzUP67X2/zOKhT5UmYXSr0avX9SgBfhYtAb8XMetSqd9aqmBkJbOSMWMHvvzHgs/z8/z+DUnMznmFdD4exkhoUTS/AecAnQSlLuzWxThZZnIn9QNHkYcysyRrx6DOv7mMTqHOkpMHl5nBWXsJ7fC9m1iUWFA/2aeoWUF1TdwL2ZjFELvpAEeV7FR3obATtcd/EvLwIajx0NuY+i3F/dnZd4+3/MGojUj593AdqftMqfezG52oYM6MaOmNkwvv95aCZunN57tW8Zheps1jwzkaRee24d2avROOGN0GRRV2jJXx13zbR0lmYWTu/TfE2vZa/ApVr2PlsDfM5snh4gK4+7p2JfAP9vtDgVe9/fT2hUWTx4CaeaUFEFn3rXBtu7U7DnPKUlCBG2c6XMCq5pylE18Cl0esIpUAt8zwZb1DMfQq1TW7yERqLU+o6b6jjfbzRI+pxRJsGq5/rCVBHxiBkEnputJF1JVyTqDxcrYlvMPoKz+OsRJ8L6jY4xB4y8aSn4brzDTFTOZ+FXpADJI/w4u1RUJrqxZ4Xrx7SoLTpTZ5DqRDAuMfVe+5hA+M49UzreM3WgqKsJ7PxMhlw7/mAz82DOu41g8VuLIalbPaDIsp5j+/J90+qa0r31CKv2SZQ+turQc3BVnvXSYOikV2gCPYLQWNmfqzOhhgATyA4zUjvzzgoEo8Aj68Zi9E5vILwIUWHRWUojTMfCVPaxpi/nM4GVDdcR2bNz5eAonOngkZd+B0NdzKvKni/K3j87GK4iGf3LJ4vDDd7TtpyAB8a8WTzJCj6/X1WeA+A6zAvmTNDfF7WM0/8sOd8k7Onr6XPvjas/saGWKPnDDIWp7y9qoL6RTSLZoxy7dC8znu2aY8PTKnnvcrO56I2Fg/BzDKUcgC96nOn6WnHLO0ASTcvYGbjLNFvfONxk7IfnrlYjEWtgOdB4VhREDIB0Yao0jNlXmHFU1alkDSu4Zg6nTI3i+uOM8OsxzSlaLYIl+b6FCtNf+P3yFrL++WwdKk10veVjXBtSvz8YwB+E/D3Xmb4u/JzStpqfwT3kOd9lkYc3Xzo6zHyUkLPkF6L94FGZHxcnZ0UXMcuPX9K///uoMjJK0DpO0+yAB2Faz3ex8p3LzOosqKbrFLEyt49yRkv8O972NC4xqPneigzM7uXaUJSBKXphW6+1A+X7ro/v97CytUwP0+J378GbnQH1OfKNUXJ6eHPzbMwOA+GZhCWYjYBikYPws2yKiiaXa0iEH2KXlPs3Po8/7yFBed2piHZr2X8f7vw90uYDquKVvpQ21BgTPHj7XCjlP4PKGoPj08a2ksjAPBNNmxezfsnzWVKIc476Vw4AErTfCGf1238VTrbSir8alaQliM4dawPlKKYZ77Yzz9vg4vifRnAJ+Aa7BRm8XxhOI9p7hRFm74xOujx8Cwbic8BRQrHmI53ws0I7eHXav7/Po+usyxvpflLP1wW1hLv/ZcA+Okcn1NGofTzXk3yWX24yf9vpqnUVvX9+ewMOJH5unYayPzqAj/z8ew0le7suiFWVLiFZWjcRuMgbJZjI/wDwL+1+RplPo+TAJ7Pzs/tyv6RBjpZPitXguY5LoGbQ7sNNNHgqcWyMZrh388WcA6uoLsCl7ffrZSJyiInaD0zbFopMBm4wewrlYIlzPVhULoJPCVJcFiTnooo9/6GEGOhyPfS08Bz2SrddanrXTPP6eJm9ugdBPIcr1HGmzT52AzXgVeU54xyDOzKxqNmbL6BqZWUEn+GdGFNe+t7F9/HcjbYvgKqz9k6y2f7PYBngJpODCjjTs9tzIPS2Xf17llqAkTRHFIGtBiWU+q83AuKsParNZDOvb/HIqkLaDOuB/AfzJvOZHqc4n1Ke4rpKP9tUO11hfezlw0KoeEMC95u1M7q840KcRhllVIo6enLQSMyfoK51WMZWoPU3mwFdardDGpGtMQz5CVzIqOcR7ruRxwCu2Hm7MQMZta+S9MT0T9kULYYWZKOvoKVtQtAzWCi7op8O4BvsAF1OPMrcXLpeu8dLL+WBhi7WV6v3dSaBs2dFR4qXRdT3mcNeO/dCBqD88cInZxVRN84quKt58WgrJL9lUzsggtKaMf7O3gNvoP2zF48j50ZG1g27sK0nOf1LkZwfiQTY4hpVTqRfxvA+43F1MWFMV2ni/dEHBha5nXDRRtvhWu0tWihBflFrOQWlDAQT3HK6DeQGUoRfA9cuiCUoSih7DQzvT+B6q0EEpkRnIl4UuJ0JOinqB2cqwXTqUpwpZSgT0dAdyW+bp9SPC5cAHSRB0XSPsxCr1sZRqKE93hrUfYEjRh/GW+tS3ARZ9mToNoxSVlKwXW52wCKCH0zZL/DoGn0IlZ+3sHMNQMXPRcv3NPg0kJ8AdrvKVPiaOnyFKQD1RnbyfyozAz7k+asigz3gKLhG3lP++HSTpeo9/UxHWhFN4XwRgLLQ36v6Ten9nhMCetuUKOLb4Bquy2SGD98Z8zH2EA7j/d2Iygi2K+cCTvgUg8bpQqHZeSIsyurjDKp1+uFy+YZB6VRf47vpR34JahZz/tAGR99vC4602NXT6ZKkz6Rkc00gsuEOFS040RwCSgF/7IIjblSk3vWKn4KqovcX8m0spIdmkc8j422v4KcnVFD9nAPpuEUXDM6oPURZTJmqsifLwbxVlBQxpAMVNn5VQ6hf8nwG4c1VqthUpeDwr+rFSPxmZjU/fQs8nWbgvOK5QIEbRoUnl7BQmUzaLbeBQFMRRTxI0ANIJbEoAyLA6AMmr8WRhvHoDYFDREeGukSKsbiNlC4fyFgBMCnWIF6M4A9WQh28f76AjLtGZtVJdB1NF8cFHpuoq+IdynaFKXsDgCfRfO1fr5jQbARwP/lz34u06w4SaaU8ZDz7jlIGa0GGCAaO/kzd+X1+jEolelRk3GRnb8qqJvbp/j7s0Fe9iVKqaqw4pZRdBZUnlDx9rXq8You5QDxZYooVGOg7It/B0U+i3Xu2xCPfiCZC28HRfzfAVfftpNl2KAy7jYro1Hooqq+VjHT2ZhStOHTxyhfQ/jEFjZer26joSi4FZRCeTeAN7GjrM/jif45KHrGdsozjMrKIE4H/L9EVtPKUBwFlYr8J2pTJ3N17qUR9LWzaN+8OKGhnczDe3hNRW6UAnQTgOruzgaloUddguKnwKMNOm0PZnbuXYlFOpcvwRjgc1RW+lePcvjoGnyTO8qrcj1co4MCXD2S1K/E1QAm6S+/65JEjsbY6BlGbSHuF9G4Qcs3Y1xb2csb69zPfkwHfsfLqOYs6k6vBdTWX8x3aMFzLiia7K+hRFZHEdwEZzaNmgr8WVOoLZreBsrHX4HW04z8/38xamegyfWexMzi8Unv/vzGGCVFawVQ45NR9feLmR5nC+uGGs7vg3A8XCdm3fRmyturMcxsLDCbl9D9sPf7rwDYO+Fne7E30DiKn2+jR5PDcA1YJtVZbqazoJ6BJt3S/QYyVVBmw1FoPbNlLjgZwG+9c/EQKF16tAF/LsI1y8gH8HhphjaNmc3/7gWNJJprh9mwOYt5T96cFdM6roDr2B0k84TflVmefLQN53OS92QCVHO9I0A2t/LawTQ8DDezVpqvvDWGNZ7PDW7ixksQ3GxR0+TnWrzGgmpwIx7crzJzer33Puka2t8hRp1UyEEUz6f20E2BuoD9GFRXUQrw7Ik3YxmAE2Le93EAv6jznhPhIp+6oUEUDYjEuyqfOcaOioUCPf/vR/xsr2WFYw2cZ74XrtOkrIV4okXwVNTvfc+7eOv96PY2Zj4/AUWzpzyv6uQcnsn3ql3OhuH9rGisg/OE+2m1fjqt/rsYcjqlUep8ZLTI//C1DNGg6BmO8vPVoOyS40Ap6CcguK6sB7Uz6GYLvddPgRp+XQHg56DIkSG5uJ5p49WgKOOeoMhJl+JD3R4va9YRlVL/n1E87jZQZO1CAA8G/H8755tJROH3bCA/yLLxaajtIJrHzGihzqwISm0UIy6L2tTcHjZCL+fXtWiuqcxs4J/d/pjoZxsoxfco1JYbyP7Lq8Ly5BWgjJiHEV10Jw1Xr9bj0WkerUf/loXQdx9coyRDMtAMPU3bMs2Mdv0Q5FlOg2qdDoHrgCmzsPps2f6fwpXxFPgxkJdxCzPEH3nCbQCumYwIt+WgRhN7KuLtiuH+t7IhixDF8aX8fU4ZunlEk64hxqKk0YyA6jkXKh4FpU79ETSn7ihQa/V9leIsaarSWS+sliVM6Bf4Ok+CPOC/RnB9xGSEz3U7aKzB7aBZkUexEiXPkgp5hiJcylXFU1R2srC9DFRjeZWxmrbyfz/V8yZ+XQlqAnEEqLHROnV2ez2FuIzalMNuTxD70RbhP3cA+B0oq2CTbUfi0B1ipGwCedt/DcqceD2o/gugIfFPCzCKfBrRDbmyAcr1MChydyXLqdsayJMoodM7tTJ5B2jW7KmgTq9ngKIBFZBDXbo2l7z/Fb6ujRJpINjryeSnQGmvv0B7s210zWIOrdfpzQafBaU1r2d9Uureu5V8kLXaE5RF8QU2NKPa3yDDfUrxsyiN8bKihyljK4lCrzqP0uymqPSX2Ti9Fg18b8oprLBJyFQOk6QILOaXRNt0Gs09oCjO/2pgkPsM5cWYmfYVRxrtLQH3p5X2Ebi0IvmfUUSTKptHbUrbbVhYdbBp7/sgZvMqUMpMUOqSzP3xaayg/qZTAHeCmh+cgc7WRBwG6tQn96hTlqX2Sc9I82cbPcBn6OwmhHszsDTUaAzKd4A8+zpVTKdd+fQ7ARcxD6Lvb7GyPR9hc9yCcQwbj5L6VgyhjUYp9UU2yv4NMyM0cTtSmpkneDooKu7PYQyb6Vbw+Ln87U42RPeL+DnC0lBFzxAZ/+aY1/ccUNM1nx/rWXryu2F+f1TnUz473+S+zfY1DFeWlFd6UwHU/K7dsDTU5nEmalO/g0orPtbiNRbcnEV/fMIVoFEG60HpAgczI1sN16Cjmy3zPrhuZWm0nqbYg9p5cfpaGrouAspTmW/x+ttRmw4xCVdDMcl/L4IiiPeAIisbQj6rXnH2AaCoot6DgQjWbxTUzlvWqJc/c1QJwe8E3N8Efz2PvZtHwrVQXw5qfJFH653TxIMjRtVCG4dQDvle44cAfgaKLj4T1KL9UFAER5p+DCman1IGfD/Ig38TKC3sdlDnvk53jrwNLmXs6aCo1HNAkYY+uM6GfXDpzNtZUboWlLa9OeBz55oGsp752MHKwJG5Xcv45xsRXwpWs7i5wd8nmRfFgRKolvArcE2NjgA1NFnF8kDm5GXVfu2Aq9kp8B5fBspcGZmn53p3UMrs4Q3e9yioKcKOACfSQh37ch3TbS+A9zBtrAdFHHfh8y41/n3Kabid1+tedhZtAaVedholNNdY5Tf82gOUvv0sfu5BNtR2UfpMXsnPzfzMt7Bz4R5ei6hxEBvxp/AebOJ728y8cA3LkW0xr+9FvL4fZv4sHeOXsA40rfSDIdAIl20A/hDB+SwrB2TZ0zmjgPDCNN/zKv794zEZBMtATtID+T4mUDveagBunMfyNtHdfMEyPoMHwWU8Qemn2+FKaebaaGkPPt8HsNzu4z2R7smTvF9PQ/ubds0Zs013zLGiPwCXYpb1XlGEbEWRLCsjUOYt6a58eWYqFSWMU2i9e9ZG9XwVpeTqIvRGxlCjGoNDQIXrr+SDrFtvRzH0XtKFi+ozZfDtCCh9KEwoLwF5ivdm4h6Bq1cdRu1A4rlghO9nGd/PXajfbGexYIj3bZk6Z9pYHOc93MG0ODYPninHjgsZi5Di/dfNeSYQfcc7Tcu9vGZl/nkcbjaapI4nTYDVw0p0tgV7jtduiNdROsrpzo+j/JJGOMMLxFA6Aa7bZz1DIyiFcCEbi1p2S437crjuuml15iUtcxq1jtjSAnh+Ge8hzr4Blr9luMws4eNjiL4WMeisHsw0O8XK72qQAzjLhswwK8xxp0j2sQNqpXJ+rYLLTKky7fSwcXMbwp3yszmf7cYY88US0/YSPgsb2KESxyD3Y9lYHOV7GOR1nITLWnqIjZjFhpTSsdfzOmWY7rqUzr+Ez889oODJXNHDjqTl7AyTWbQyMizD5/HuDjhtWkYW8dTNLVbsBxqlISFoPz0vqm6tYd//Ba5GErbXiXfSGGavsC0mWjJ6MhgWjrFtMBgMhkVuJOwNiuhJW/ASXN1AFeQFisJYrNfa/j2wol3D4oHRuqFTdGe0Z0iaDmIwGAyGhDLkQdAwWj2brgBKSSm1wVjU8/vkaxlU37bOhI3BYDC0FRYlMhgMBoMJM0MgdE3jEGgu00tAQ6+lxXgBVMchzTWKyqisRHAPFbW/0/z9DjZWZWZdag7Xqtr2GuYBXyvZMnQMi6E2rxkYDRoMBoPBjEVD4JquARWzPgPAC/i1t3qPdETy1z8b4X3oCKAYotsBXOoZlAaDKemGKGGGosGQXMzFSRwXumAOaYPBjMUFxnDXsWG4EtRVaV9Q++a9AawAdeVKKwVKBn3qbocT/Dvd2rjVAbnlEGNxFItzBpjBYIpg87DIYC2a6W5tMMwXJNlJXF1A59MMX4MZiwsAF4Bm3mxlA0/PWJGRGVVQtG+ADbxdQGmjs6nbqyjGEcSoe73f5yJ4Nmn7u50NxKeB2mJ/AfG3xzYYDPNLETRDsRZmKBoMdj7jMHwNBjMWE4SDATwfFA0cBdUJToG88uJVlyHeVf5dN1yaaNLTN3uU4bkbf/9HNB72bTAYDAaDwWAwGAyL2ljcCxQlBNyA+d4Fti6ToChoCsDDAH6Ezg7yNhgMBoPBYDAYDGYsJh77gDqEAhQ9TIEijAOgmsEs3LBrPSdLxlukE/58JVBkVO791wCuMHI3GAwGg8FgMBgMZizWx8tADWjEUEyxoSjrUYFLSQ0yDJOehpoH1SwCwHUAfgoam2EwGAwGg8FgMBgMTSG1SJ5TG3zLATybv59WayCGYhWUktodYChWMD/a8kvN4mMAfgDgeiN1g8FgMBgMBoPBYMbiTOjupacoI7CgjMZx/r7kGYfS6KaE+TOXMANq2HMhvwwGg8FgMBgMBoNh1kbFQjaEK54BmAZwlDIeB/hrTr13CVzr+Cq/11+n+WA03g+qVZw0MjcYDAaDwWAwGAyG+sgBeARuNEZSX9Kgplrn5f+9CIqUVgHcAeBM226DwWAwGAwGg8EwV6QW2fMeDGBoHtxnOmBvKsqY3KD+PgpgGyj6mQOwEcAHYN1PDQaDwWAwGAwGQwtYbN1QjwewDPOn9hBsHMr9Svrsbvx1ChRJXME/XwvgawAuNdI2GAwGg8FgMBgMZiw2htQvHjWP79+f+TjChuJS/vmvAD4O4Coja4PBYDAYDAaDwWDGYnOogEZm7DUP7z1ozuM0atNpfwvg0wD+ZCRtMBgMBoPBYDAYzFicHY4EpaDOB5RDjERBjr8+AuB7AH4M6n5qMBgMBoPBYDAYDGYszhInwg2rnw/Gop92Kt1OC/z9NWwoWiMbg8FgMBgMBoPBYMZiCzgEQHae3nsFQB7U+XQKwCcBXAJgLGRPS0baBoPBYDAYDAaDwdAY+4KawTyF+rMLm31N86sU8vcpNu7qvUdmI8p7w96XB/AAqMvp82wrDQaDwWAwGAwGQxxYLJFF6YK6ir9Ot/h5uYDf6XEcjdJdx/g9WW8P8vzKAPgbgN8A+DOAB0FRxaqRrMFgMBgMBoPBYDBjMZrnKwM4mH+eYkMvF9Hnl/lVUt9XQbWGVe/3JTYoK3z9YVBkcSeAxwDcA4ogbgbwOyNNg8FgMBgMBoPB0El0LZLnPA/A3mwsZtF6Td8UG4MVZRCWlLE47hmLvjF5JxuKk/xZBoPBYDAYDAaDwWCIAf7YiaF5ct/9AFag/tgMg8FgMBgMBoPBYDAY0IXF1bXWYDAYDAaDwWAwJAD/P8EEYTrB/+trAAAAAElFTkSuQmCC';
+let custom = null;
+const wmAspect = () => custom ? custom.naturalHeight / custom.naturalWidth : BAR.aspect;
+
+/* w=輸出寬度, h=白條高度, refW=這張照片的原始寬度。
+   crop：標誌照 refW 定尺寸，等於白條左右被切掉。scale：整條壓進 w。 */
+function paintWatermark(ctx, x, y, w, h, refW, mode){
+  const base = mode === 'crop' ? refW : w;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  if(custom){
+    ctx.drawImage(custom, x + (w - base)/2, y, base, h);
+  }else{
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y, w, h);
+    if(logo.complete && logo.naturalWidth){
+      const lw = base * BAR.logoW, lh = h * BAR.logoH;
+      ctx.drawImage(logo, x + (w - lw)/2, y + h * BAR.logoTop, lw, lh);
+    }
+  }
+  ctx.restore();
+}
+function refreshSample(){
+  const t = cur();
+  const c = document.createElement('canvas');
+  c.width = 560; c.height = Math.max(1, Math.round(560 * wmAspect()));
+  paintWatermark(c.getContext('2d'), 0, 0, c.width, c.height, c.width, 'scale');
+  $('#wmSample').src = c.toDataURL();
+  $('#wmcard').classList.toggle('off', !!t && t.wmMode === 'off');
+}
+logo.onload = () => { refreshSample(); if(cur()) render(); };
+
+/* ============ 比例 ============ */
+const LAND = [[4,3],[3,2],[16,9],[5,4],[7,5],[16,10],[2,1],[21,9],[14,9],[65,24]];
+const PORT = [[3,4],[2,3],[9,16],[4,5],[5,7],[10,16],[1,2],[9,21],[9,14],[24,65]];
+function buildChips(el, list){
+  list.forEach(([w,h]) => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = w+':'+h; b.dataset.w = w; b.dataset.h = h;
+    b.onclick = () => { const t = cur(); if(!t) return;
+      t.ratio = {w,h}; $('#cw').value = w; $('#chh').value = h;
+      document.querySelectorAll('.ratios .chip').forEach(c =>
+        c.classList.toggle('on', +c.dataset.w === w && +c.dataset.h === h));
+      buildTabs(); render(); };
+    el.appendChild(b);
+  });
+}
+buildChips($('#rowLand'), LAND); buildChips($('#rowPort'), PORT); buildChips($('#rowSq'), [[1,1]]);
+$('#applyCustom').onclick = () => {
+  const t = cur(); if(!t) return;
+  const w = parseFloat($('#cw').value), h = parseFloat($('#chh').value);
+  if(!(w>0 && h>0)) return toast('自訂比例要填兩個大於 0 的數字');
+  t.ratio = {w,h}; buildTabs(); render();
+};
+
+/* ============ 載入 ============ */
+$('#pick').onclick = () => $('#file').click();
+$('#file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+$('#wmPick').onclick = () => $('#wmFile').click();
+$('#wmFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if(!f) return;
+  try{ const {img} = await loadImage(f); custom = img;
+    $('#wmName').textContent = '自備：' + f.name; refreshSample(); render();
+  }catch(err){ toast('這個浮水印檔讀不到'); }
+};
+document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dropping'); });
+document.addEventListener('dragleave', e => { if(e.relatedTarget === null) document.body.classList.remove('dropping'); });
+document.addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('dropping'); addFiles(e.dataTransfer.files); });
+
+async function addFiles(list){
+  const all = [...list];
+  const files = all.filter(f => f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i.test(f.name));
+  $('#loaderr').className = 'loaderr';
+  if(!files.length) return showErr(all[0] || {name:'檔案'}, new Error('notimage'));
+  const seed = cur();
+  for(const f of files){
+    try{
+      const {img} = await loadImage(f);
+      if(!img.naturalWidth || !img.naturalHeight) throw new Error('decode');
+      // 目前分頁還是空的就填進去，否則另開一頁
+      let t = cur();
+      if(t && t.img){ t = DEF(seed); S.tabs.push(t); S.active = S.tabs.length - 1; }
+      Object.assign(t, {name:f.name, img, W:img.naturalWidth, H:img.naturalHeight,
+                        cs:null, csW:0, sm:null});
+      makeThumb(t);
+      t.trim = detectBottomBar(t);
+      try{ t.meta = readMeta(new Uint8Array(await f.arrayBuffer())); }catch(e){ t.meta = null; }
+    }catch(err){ showErr(f, err); }
+  }
+  syncPanel(); buildTabs(); render();
+}
+function loadImage(file){
+  const tryUrl = url => new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res({img, url}); img.onerror = () => rej(new Error('decode'));
+    img.src = url;
+  });
+  const asData = () => new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('read'));
+    fr.readAsDataURL(file);
+  });
+  let bu; try{ bu = URL.createObjectURL(file); }catch(e){ bu = null; }
+  const fb = () => asData().then(tryUrl);
+  return bu ? tryUrl(bu).catch(() => { URL.revokeObjectURL(bu); return fb(); }) : fb();
+}
+function showErr(f, err){
+  const heic = /\.(heic|heif)$/i.test(f.name || '') || /heic|heif/i.test(f.type || '');
+  const box = $('#loaderr');
+  box.textContent = heic
+    ? `${f.name}：瀏覽器不支援 HEIC / HEIF 解碼。手機「照片」設定改成「最相容」，或先轉成 JPEG。`
+    : err && err.message === 'notimage' ? `${f.name}：這不是圖片檔。`
+    : `${f.name}：解不開這個檔案，可能是格式不支援或檔案損毀。`;
+  box.classList.add('show');
+  toast('有檔案讀不到，看下方說明');
+}
+/* 兩段式：先在小快取上粗掃找到大概的邊界，再回原圖掃一條窄帶把邊界對準到畫素。
+   全程只讀取需要的那幾列，不會整張搬進 getImageData。 */
+const SW = 256;
+function scanUp(data, rows){          // 由下往上數連續的近白列
+  let n = 0;
+  for(let y = rows - 1; y >= 0; y--){
+    let white = 0, base = y * SW * 4;
+    for(let i = 0; i < SW; i++){
+      const p = base + i*4;
+      if(data[p] > 246 && data[p+1] > 246 && data[p+2] > 246) white++;
+    }
+    if(white / SW < 0.6) break;
+    n++;
+  }
+  return n;
+}
+function sample(t, sy, sh, dh){
+  const c = document.createElement('canvas');
+  c.width = SW; c.height = dh;
+  const x = c.getContext('2d', {willReadFrequently:true});
+  x.imageSmoothingEnabled = false;
+  x.drawImage(t.img, 0, sy, t.W, sh, 0, 0, SW, dh);
+  try{ return x.getImageData(0, 0, SW, dh).data; }catch(e){ return null; }
+}
+function detectBottomBar(t){
+  const zone = Math.floor(t.H * 0.4);
+  const dh = Math.min(zone, 600), k = dh / zone;
+  const coarse = sample(t, t.H - zone, zone, dh);
+  if(!coarse) return 0;
+  const n = scanUp(coarse, dh);
+  if(n < 2) return 0;
+  if(n >= dh) return zone;                       // 整個掃描區都是白的
+  let h = Math.round(n / k);
+  const pad = Math.ceil(2/k) + 4;                // 邊界附近再用原始畫素細修
+  const top = clamp(t.H - h - pad, 0, t.H - 1);
+  const band = Math.min(pad * 2, t.H - top);
+  const fine = sample(t, top, band, band);
+  if(fine){
+    const f = scanUp(fine, band);
+    if(f > 0 && f < band) h = t.H - top - band + f;
+  }
+  return h;
+}
+
+/* ============ 分頁列 ============ */
+function buildTabs(){
+  const bar = $('#tabbar');
+  bar.innerHTML = '';
+  S.tabs.forEach((t, i) => {
+    const el = document.createElement('div');
+    el.className = 'tab' + (i === S.active ? ' on' : '');
+    el.innerHTML = (t.thumb ? `<img class="tt" src="${t.thumb}" alt="">` : `<span class="tt blank"></span>`)
+      + `<span class="tn" title="${t.name}">${t.name}</span>`
+      + `<span class="tr mono">${t.ratio.w}:${t.ratio.h}</span>`
+      + (t.img ? `<button class="ta" title="從這個分頁匯出">⤓</button>` : '')
+      + `<button class="tx" title="關閉分頁">×</button>`;
+    el.onclick = e => {
+      if(e.target.classList.contains('tx')) return closeTab(i);
+      const go = () => { S.active = i; syncPanel(); buildTabs(); render(); };
+      if(e.target.classList.contains('ta')){ go(); return openExport(); }
+      go();
+    };
+    bar.appendChild(el);
+  });
+  const plus = document.createElement('button');
+  plus.className = 'newtab'; plus.textContent = '+'; plus.title = '新增空白分頁';
+  plus.onclick = newTab;
+  bar.appendChild(plus);
+}
+function newTab(){
+  S.tabs.push(DEF(cur()));
+  S.active = S.tabs.length - 1;
+  syncPanel(); buildTabs(); render();
+}
+function closeTab(i){
+  const g = S.tabs[i]; if(g){ g.cs = g.sm = g.img = null; }
+  if(S.tabs.length === 1) S.tabs[0] = DEF(S.tabs[0]);   // 最後一頁改成清空，不整個關掉
+  else S.tabs.splice(i, 1);
+  if(S.active >= S.tabs.length) S.active = S.tabs.length - 1;
+  syncPanel(); buildTabs(); render();
+}
+const cur = () => S.tabs[S.active] || null;
+
+/* 面板 → 反映目前分頁 */
+function syncPanel(){
+  const t = cur(), on = !!(t && t.img);
+  view.hidden = !on; $('#empty').hidden = on; $('#readout').hidden = !on;
+  $('#save').disabled = !on;
+  if(!t) return;
+  $('#fileinfo').textContent = on ? `${t.name} · ${t.W}×${t.H}` : '這個分頁還沒有照片';
+  $('#cw').value = t.ratio.w; $('#chh').value = t.ratio.h;
+  $('#size').value = Math.round(t.size*100); $('#sizeVal').textContent = Math.round(t.size*100) + '%';
+  [...$('#wmMode').children].forEach(c => c.classList.toggle('on', c.dataset.v === t.wmMode));
+  $('#wmHint').textContent = WMHINT[t.wmMode];
+  document.querySelectorAll('.ratios .chip').forEach(b =>
+    b.classList.toggle('on', +b.dataset.w === t.ratio.w && +b.dataset.h === t.ratio.h));
+  refreshSample();
+  if(!on){ $('#trimInfo').textContent = '—'; return; }
+  const mx = Math.floor(t.H * 0.4);
+  $('#trimH').max = mx; $('#trimH').value = Math.min(t.trim, mx);
+  $('#trimNum').max = mx; $('#trimNum').value = t.trim;
+  showTrim(t);
+}
+function showTrim(t){
+  $('#trimInfo').textContent = t.trim ? `來源底部白邊 ${t.trim}px 已排除` : '整張都是照片，沒有要排除的白邊';
+}
+const WMHINT = {
+  crop:'白條維持照片原本的尺度，左右兩側跟著照片一起被裁掉，標誌保持原本的畫素大小、置中。',
+  scale:'整條等比壓進輸出寬度，標誌一定完整，但白條會隨比例變薄。',
+  off:'只輸出照片區，不加浮水印。'
+};
+
+/* ============ 幾何 ============ */
+function geom(t){
+  const W = t.W, H = t.H, contentH = H - t.trim;
+  const R = t.ratio.w / t.ratio.h;
+  const wa = t.wmMode === 'off' ? 0 : wmAspect();
+  const fixed = t.wmMode === 'crop';
+  const hw0 = Math.round(W * wa);
+  let maxWo = fixed ? Math.min(W, R * (contentH + hw0))
+                    : (1/R - wa > 1e-9 ? Math.min(W, contentH / (1/R - wa)) : W);
+  let Wo = Math.max(8, Math.min(W, Math.round(maxWo * t.size)));
+  let hw, Ho, ch;
+  for(let g = 0; g < 64; g++){
+    hw = t.wmMode === 'off' ? 0 : (fixed ? hw0 : Math.round(Wo * wa));
+    Ho = Math.round(Wo / R); ch = Ho - hw;
+    if(ch <= contentH || Wo <= 8) break;
+    Wo--;
+  }
+  return {W, H, contentH, Wo, Ho, hw, ch, ok: ch >= 1 && ch <= contentH && Wo >= 8,
+          cx: Math.round(t.px * (W - Wo)), cy: Math.round(t.py * (contentH - ch))};
+}
+
+/* ============ 畫面 ============ */
+let fit = {s:1}, raf = 0;
+function render(){                       // 合併同一幀內的多次要求
+  if(raf) return;
+  raf = requestAnimationFrame(() => { raf = 0; draw(); });
+}
+function draw(){
+  const t = cur(); if(!t || !t.img) return;
+  document.querySelectorAll('.ratios .chip').forEach(b =>
+    b.classList.toggle('on', +b.dataset.w === t.ratio.w && +b.dataset.h === t.ratio.h));
+  const g = geom(t);
+
+  const stage = $('#stage'), pad = 44;
+  const s = Math.min((stage.clientWidth - pad)/t.W, (stage.clientHeight - pad)/t.H);
+  const w = Math.max(1, Math.round(t.W*s)), h = Math.max(1, Math.round(t.H*s));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cw = Math.round(w*dpr), chh = Math.round(h*dpr);
+  if(view.width !== cw || view.height !== chh){     // 尺寸沒變就別重新配置畫布
+    view.style.width = w+'px'; view.style.height = h+'px';
+    view.width = cw; view.height = chh;
+  }
+  fit.s = w/t.W;
+  const k = fit.s;
+
+  vctx.setTransform(dpr,0,0,dpr,0,0);
+  vctx.clearRect(0,0,w,h);
+  vctx.drawImage(stageCache(t, cw), 0, 0, w, h);
+
+  const X = g.cx*k, Y = g.cy*k, Wd = g.Wo*k, Hd = g.ch*k;
+  vctx.fillStyle = 'rgba(8,10,13,.68)';
+  vctx.fillRect(0,0,w,Y); vctx.fillRect(0,Y+Hd,w,h-Y-Hd);
+  vctx.fillRect(0,Y,X,Hd); vctx.fillRect(X+Wd,Y,w-X-Wd,Hd);
+
+  vctx.strokeStyle = '#f0a93b'; vctx.lineWidth = 1.5;
+  vctx.strokeRect(X+.5, Y+.5, Wd-1, Hd-1);
+  vctx.strokeStyle = 'rgba(240,169,59,.30)'; vctx.lineWidth = 1;
+  for(let i=1;i<3;i++){
+    vctx.beginPath(); vctx.moveTo(X+Wd*i/3, Y); vctx.lineTo(X+Wd*i/3, Y+Hd); vctx.stroke();
+    vctx.beginPath(); vctx.moveTo(X, Y+Hd*i/3); vctx.lineTo(X+Wd, Y+Hd*i/3); vctx.stroke();
+  }
+  vctx.strokeStyle = '#f0a93b'; vctx.lineWidth = 3;
+  const L = Math.min(16, Wd/3, Hd/3);
+  [[X,Y,1,1],[X+Wd,Y,-1,1],[X,Y+Hd,1,-1],[X+Wd,Y+Hd,-1,-1]].forEach(([px,py,sx,sy]) => {
+    vctx.beginPath(); vctx.moveTo(px, py+sy*L); vctx.lineTo(px,py); vctx.lineTo(px+sx*L, py); vctx.stroke();
+  });
+  tag(vctx, X+5, Y+5, g.Wo+' × '+g.ch, '#f0a93b');
+
+  $('#rSrc').textContent = t.W+' × '+t.H;
+  $('#rCrop').textContent = g.Wo+' × '+g.ch+'  @ '+g.cx+','+g.cy;
+  $('#rWm').textContent = t.wmMode === 'off' ? '不加' : g.Wo+' × '+g.hw;
+  const out = $('#rOut');
+  out.textContent = g.ok ? g.Wo+' × '+g.Ho+'  ('+t.ratio.w+':'+t.ratio.h+')' : '無法輸出';
+  out.className = 'v ' + (g.ok ? '' : 'bad');
+
+  const m = t.meta, carried = m && S.meta !== 'none' && S.fmt !== 'webp', kept = [];
+  if(carried){
+    if(m.exif) kept.push('EXIF');
+    if(m.gps && S.meta === 'all') kept.push('GPS');
+    if(m.icc && S.fmt === 'jpeg') kept.push('ICC');
+    if(m.xmp && S.meta === 'all' && S.fmt === 'jpeg') kept.push('XMP');
+  }
+  const rm = $('#rMeta');
+  rm.textContent = !m ? '來源沒有' : kept.length ? kept.join(' · ') : '不寫入';
+  rm.className = 'v ' + (kept.length ? 'cy' : '');
+  const bg = $('#badges'); bg.innerHTML = '';
+  if(!m) bg.innerHTML = '<span class="badge off">來源沒有可搬的中繼資料</span>';
+  else [['EXIF',m.exif],['GPS',m.gps],['ICC',m.icc],['XMP',m.xmp]].forEach(([n,has]) => {
+    if(!has) return;
+    const onn = kept.includes(n);
+    bg.insertAdjacentHTML('beforeend', `<span class="badge${onn?'':' off'}">${n} ${onn?'保留':'不寫入'}</span>`);
+  });
+
+  const warn = $('#warn');
+  if(!g.ok){
+    warn.className = 'warn show';
+    warn.textContent = '這個比例配上浮水印會把照片區壓到 0。換一個比例、改用「縮放」，或把浮水印關掉。';
+    $('#save').disabled = true;
+  }else{ warn.className = 'warn'; $('#save').disabled = false; }
+  drawResult(t, g);
+}
+function tag(c,x,y,text,color){
+  c.font = '500 11px "IBM Plex Mono", monospace';
+  const w = c.measureText(text).width + 10;
+  c.fillStyle = 'rgba(10,12,15,.82)'; c.fillRect(x,y,w,17);
+  c.fillStyle = color; c.textBaseline = 'middle'; c.fillText(text, x+5, y+9);
+}
+function buildOutput(t, g){
+  const c = document.createElement('canvas');
+  c.width = g.Wo; c.height = g.Ho;
+  const x = c.getContext('2d');
+  x.imageSmoothingQuality = 'high';
+  x.drawImage(t.img, g.cx, g.cy, g.Wo, g.ch, 0, 0, g.Wo, g.ch);
+  if(t.wmMode !== 'off' && g.hw > 0) paintWatermark(x, 0, g.ch, g.Wo, g.hw, t.W, t.wmMode);
+  return c;
+}
+function drawResult(t, g){
+  if(!g.ok){ result.width = result.height = 1; return; }
+  const sc = Math.min(1, 268/g.Wo, 210/g.Ho);
+  result.width = Math.max(1, Math.round(g.Wo*sc));
+  result.height = Math.max(1, Math.round(g.Ho*sc));
+  const hh = Math.round(g.hw*sc), cy = result.height - hh;
+  rctx.imageSmoothingQuality = 'high';
+  rctx.clearRect(0,0,result.width,result.height);
+  const sm = smallCache(t), r = sm.width / t.W;
+  rctx.drawImage(sm, g.cx*r, g.cy*r, g.Wo*r, g.ch*r, 0, 0, result.width, cy);
+  if(t.wmMode !== 'off' && hh > 0) paintWatermark(rctx, 0, cy, result.width, hh, t.W*sc, t.wmMode);
+}
+
+/* ============ 控制 ============ */
+$('#size').oninput = e => { const t = cur(); if(!t) return;
+  t.size = +e.target.value/100; $('#sizeVal').textContent = e.target.value+'%'; render(); };
+$('#nine').onclick = e => {
+  const b = e.target.closest('button'), t = cur(); if(!b || !t) return;
+  const [px,py] = b.dataset.p.split(' ').map(Number);
+  t.px = px; t.py = py; render();
+};
+$('#wmMode').onclick = e => {
+  const b = e.target.closest('button'), t = cur(); if(!b || !t) return;
+  t.wmMode = b.dataset.v;
+  [...e.currentTarget.children].forEach(c => c.classList.toggle('on', c === b));
+  $('#wmHint').textContent = WMHINT[t.wmMode];
+  refreshSample(); render();
+};
+$('#tweak').onclick = () => {
+  const a = $('#trimAdv'); a.hidden = !a.hidden;
+  $('#tweak').textContent = a.hidden ? '手動調' : '收起';
+};
+function setTrim(v){
+  const t = cur(); if(!t) return;
+  t.trim = clamp(Math.round(v), 0, Math.floor(t.H*0.4));
+  $('#trimH').value = t.trim; $('#trimNum').value = t.trim;
+  showTrim(t); render();
+}
+$('#trimH').oninput = e => setTrim(+e.target.value);
+$('#trimNum').oninput = e => setTrim(+e.target.value);
+$('#reDetect').onclick = () => { const t = cur(); if(t) setTrim(detectBottomBar(t)); };
+$('#applyAll').onclick = () => {
+  const t = cur(); if(!t || !t.img) return;
+  S.tabs.forEach(o => { if(o === t) return;
+    o.ratio = {...t.ratio}; o.size = t.size; o.px = t.px; o.py = t.py; o.wmMode = t.wmMode; });
+  buildTabs(); render();
+  toast(`已套到其他 ${S.tabs.length-1} 個分頁`);
+};
+$('#fmt').onclick = e => {
+  const b = e.target.closest('button'); if(!b) return;
+  S.fmt = b.dataset.f;
+  [...e.currentTarget.children].forEach(c => c.classList.toggle('on', c === b));
+  $('#fmtHint').textContent = {
+    png:'照片區畫素 1:1 複製，不縮放、不重新編碼；EXIF 以 eXIf 區塊夾帶。',
+    webp:'無損 WebP，檔案比 PNG 小、畫素同樣不變，但容器不支援夾帶中繼資料。',
+    jpeg:'品質 100 的 JPEG，中繼資料原封不動搬回去。檔案最小，但屬於重新編碼。'
+  }[S.fmt];
+  if(cur()) render();
+};
+$('#metaMode').onclick = e => {
+  const b = e.target.closest('button'); if(!b) return;
+  S.meta = b.dataset.m;
+  [...e.currentTarget.children].forEach(c => c.classList.toggle('on', c === b));
+  $('#metaHint').textContent = {
+    all:'拍攝參數、鏡頭、時間、GPS、色彩描述檔全部寫回輸出檔；方向標記歸零、尺寸改成新的裁切結果。',
+    nogps:'保留拍攝參數與色彩描述檔，拿掉 GPS 座標和可能夾帶座標的 XMP。適合公開分享。',
+    none:'輸出檔不帶任何來源資訊。'
+  }[S.meta];
+  if(cur()) render();
+};
+
+let drag = null;
+view.addEventListener('pointerdown', e => {
+  const t = cur(); if(!t) return;
+  view.setPointerCapture(e.pointerId); view.classList.add('dragging');
+  drag = {x:e.clientX, y:e.clientY, px:t.px, py:t.py, g:geom(t)};
+});
+view.addEventListener('pointermove', e => {
+  if(!drag) return;
+  const t = cur(), g = drag.g;
+  const dx = (e.clientX-drag.x)/fit.s, dy = (e.clientY-drag.y)/fit.s;
+  const rx = t.W-g.Wo, ry = g.contentH-g.ch;
+  t.px = rx > 0 ? clamp(drag.px + dx/rx, 0, 1) : 0;
+  t.py = ry > 0 ? clamp(drag.py + dy/ry, 0, 1) : 0;
+  render();
+});
+['pointerup','pointercancel'].forEach(ev => view.addEventListener(ev, () => { drag = null; view.classList.remove('dragging'); }));
+
+window.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){
+    if(!$('#exp').hidden) return closeExport();
+    if(!$('#lb').hidden) return closeLB();
+  }
+  const t = cur(); if(!t) return;
+  if(/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  if(!$('#exp').hidden || !$('#lb').hidden) return;
+  const map = {ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1]};
+  const m = map[e.key]; if(!m) return;
+  e.preventDefault();
+  const step = e.shiftKey ? 10 : 1, g = geom(t);
+  const rx = t.W-g.Wo, ry = g.contentH-g.ch;
+  if(rx > 0) t.px = clamp(t.px + m[0]*step/rx, 0, 1);
+  if(ry > 0) t.py = clamp(t.py + m[1]*step/ry, 0, 1);
+  render();
+});
+window.addEventListener('resize', () => { if(cur()) render(); if(!$('#lb').hidden) lbFit(); });
+
+/* ============ 放大檢視 ============ */
+const lb = $('#lb'), lbc = $('#lbc');
+let lbZ = 1, lbFitZ = 1, lbTx = 0, lbTy = 0, lbMoved = false, lbPan = null;
+let lbScale = 1;
+$('#previewBox').onclick = () => {
+  const t = cur(); if(!t || !t.img) return;
+  const g = geom(t); if(!g.ok) return;
+  const CAP = 24e6;                       // 檢視畫布上限 2400 萬畫素
+  lbScale = g.Wo*g.Ho > CAP ? Math.sqrt(CAP/(g.Wo*g.Ho)) : 1;
+  const out = buildOutput(t, g);
+  lbc.width = Math.round(out.width*lbScale); lbc.height = Math.round(out.height*lbScale);
+  const x = lbc.getContext('2d'); x.imageSmoothingQuality = 'high';
+  x.drawImage(out, 0, 0, lbc.width, lbc.height);
+  $('#lbSize').textContent = g.Wo+' × '+g.Ho + (lbScale < 1 ? '（檢視用縮圖）' : '');
+  lb.hidden = false; lbFit();
+};
+function lbFit(){
+  if(!lbc.width) return;
+  lbFitZ = Math.min((innerWidth-64)/lbc.width, (innerHeight-120)/lbc.height, 1);
+  lbZ = lbFitZ; lbTx = lbTy = 0; lbApply();
+}
+function lbApply(){
+  lbc.style.width = (lbc.width*lbZ)+'px'; lbc.style.height = 'auto';
+  lbc.style.transform = `translate(${lbTx}px, ${lbTy}px)`;
+  $('#lbZoom').textContent = Math.round(lbZ*lbScale*100)+'%';
+}
+function closeLB(){ lb.hidden = true; }
+lb.addEventListener('wheel', e => {
+  e.preventDefault();
+  const nz = clamp(lbZ*Math.exp(-e.deltaY*0.0015), lbFitZ*0.4, 8);
+  const r = lbc.getBoundingClientRect();
+  const f = nz/lbZ - 1;
+  lbTx -= (e.clientX-(r.left+r.width/2))*f; lbTy -= (e.clientY-(r.top+r.height/2))*f;
+  lbZ = nz; lbApply();
+}, {passive:false});
+lbc.addEventListener('pointerdown', e => {
+  lbc.setPointerCapture(e.pointerId); lbc.classList.add('panning');
+  lbPan = {x:e.clientX, y:e.clientY, tx:lbTx, ty:lbTy}; lbMoved = false;
+});
+lbc.addEventListener('pointermove', e => {
+  if(!lbPan) return;
+  lbTx = lbPan.tx + (e.clientX-lbPan.x); lbTy = lbPan.ty + (e.clientY-lbPan.y);
+  if(Math.abs(e.clientX-lbPan.x)+Math.abs(e.clientY-lbPan.y) > 4) lbMoved = true;
+  lbApply();
+});
+['pointerup','pointercancel'].forEach(ev => lbc.addEventListener(ev, () => { lbPan = null; lbc.classList.remove('panning'); }));
+lb.addEventListener('click', e => { if(e.target !== lbc && !lbMoved) closeLB(); lbMoved = false; });
+
+/* ---------------- metadata: EXIF / GPS / ICC / XMP ---------------- */
+function ascii(u8, off, len){
+  let s = '';
+  for(let i = off; i < Math.min(off+len, u8.length); i++) s += String.fromCharCode(u8[i]);
+  return s;
+}
+function concat(parts){
+  let n = 0; parts.forEach(p => n += p.length);
+  const out = new Uint8Array(n); let o = 0;
+  parts.forEach(p => { out.set(p, o); o += p.length; });
+  return out;
+}
+/* 切出 JPEG 的每個 marker 區段 */
+function jpegSegs(u8){
+  if(u8[0] !== 0xFF || u8[1] !== 0xD8) return null;
+  const segs = []; let i = 2;
+  while(i < u8.length - 1){
+    if(u8[i] !== 0xFF) break;
+    const m = u8[i+1];
+    if(m === 0x01 || (m >= 0xD0 && m <= 0xD9)){ i += 2; continue; }
+    if(m === 0xDA){ segs.push({marker:m, start:i, end:u8.length}); break; }
+    const len = (u8[i+2] << 8) | u8[i+3];
+    if(len < 2) break;
+    segs.push({marker:m, start:i, end:i + 2 + len});
+    i += 2 + len;
+  }
+  return segs;
+}
+const isExifSeg = a => a[1] === 0xE1 && ascii(a, 4, 4) === 'Exif';
+const isXmpSeg  = a => a[1] === 0xE1 && ascii(a, 4, 23) === 'http://ns.adobe.com/xap';
+const isIccSeg  = a => a[1] === 0xE2 && ascii(a, 4, 11) === 'ICC_PROFILE';
+
+function readMeta(u8){
+  const segs = jpegSegs(u8);
+  if(!segs) return null;                                  // 只有 JPEG 原檔帶得走中繼資料
+  const apps = segs.filter(s => s.marker >= 0xE0 && s.marker <= 0xEF)
+                   .map(s => u8.slice(s.start, s.end));
+  if(!apps.length) return null;
+  const m = {apps, exif:false, gps:false, icc:false, xmp:false};
+  apps.forEach(a => {
+    if(isExifSeg(a)){ m.exif = true; if(tiffHasTag(a, 0x8825)) m.gps = true; }
+    else if(isXmpSeg(a)) m.xmp = true;
+    else if(isIccSeg(a)) m.icc = true;
+  });
+  return (m.exif || m.icc || m.xmp) ? m : null;
+}
+function tiffOpen(a){
+  const t = 10;                                           // FFE1 + 長度2 + "Exif\0\0"
+  if(a.length < t + 8) return null;
+  const dv = new DataView(a.buffer, a.byteOffset, a.byteLength);
+  const bo = dv.getUint16(t, false);
+  if(bo !== 0x4949 && bo !== 0x4D4D) return null;
+  const le = bo === 0x4949;
+  if(dv.getUint16(t+2, le) !== 42) return null;
+  const ifd0 = t + dv.getUint32(t+4, le);
+  if(ifd0 + 2 > a.length) return null;
+  return {dv, le, t, ifd0};
+}
+function tiffHasTag(a, tag){
+  const x = tiffOpen(a); if(!x) return false;
+  const n = x.dv.getUint16(x.ifd0, x.le);
+  for(let i = 0; i < n; i++) if(x.dv.getUint16(x.ifd0 + 2 + i*12, x.le) === tag) return true;
+  return false;
+}
+function setVal(dv, e, le, type, v){
+  if(dv.getUint32(e+4, le) !== 1) return;
+  if(type === 3){ dv.setUint16(e+8, v, le); dv.setUint16(e+10, 0, le); }
+  else if(type === 4) dv.setUint32(e+8, v, le);
+}
+/* 把某個標籤整筆從 IFD 移掉：後面的項目往前搬，數量減一 */
+function dropEntry(a, dv, ifd, le, tag){
+  const n = dv.getUint16(ifd, le);
+  for(let i = 0; i < n; i++){
+    const e = ifd + 2 + i*12;
+    if(dv.getUint16(e, le) === tag){
+      a.copyWithin(e, e + 12, ifd + 2 + n*12);
+      dv.setUint16(ifd, n - 1, le);
+      dv.setUint32(ifd + 2 + (n-1)*12, 0, le);
+      return true;
+    }
+  }
+  return false;
+}
+/* 方向歸零、尺寸改成輸出尺寸、丟掉對不上的內嵌縮圖 */
+function patchExif(a, W, H, dropGps){
+  const x = tiffOpen(a); if(!x) return;
+  const {dv, le, t, ifd0} = x;
+  const n = dv.getUint16(ifd0, le);
+  let exifIfd = 0;
+  for(let i = 0; i < n; i++){
+    const e = ifd0 + 2 + i*12;
+    const tag = dv.getUint16(e, le), type = dv.getUint16(e+2, le);
+    if(tag === 0x0112) setVal(dv, e, le, type, 1);        // Orientation
+    else if(tag === 0x0100) setVal(dv, e, le, type, W);   // ImageWidth
+    else if(tag === 0x0101) setVal(dv, e, le, type, H);   // ImageLength
+    else if(tag === 0x8769) exifIfd = t + dv.getUint32(e+8, le);
+  }
+  if(exifIfd && exifIfd + 2 <= a.length){
+    const m = dv.getUint16(exifIfd, le);
+    for(let i = 0; i < m; i++){
+      const e = exifIfd + 2 + i*12;
+      const tag = dv.getUint16(e, le), type = dv.getUint16(e+2, le);
+      if(tag === 0xA002) setVal(dv, e, le, type, W);      // PixelXDimension
+      else if(tag === 0xA003) setVal(dv, e, le, type, H); // PixelYDimension
+    }
+  }
+  dv.setUint32(ifd0 + 2 + n*12, 0, le);                   // 切斷 IFD1（舊縮圖）
+  if(dropGps) dropEntry(a, dv, ifd0, le, 0x8825);
+}
+function prepApps(meta, W, H, mode){
+  if(!meta || mode === 'none') return [];
+  const out = [];
+  for(const seg of meta.apps){
+    if(isExifSeg(seg)){
+      const a = seg.slice();
+      try{ patchExif(a, W, H, mode === 'nogps'); }
+      catch(e){ if(mode === 'nogps') continue; }          // 改不動就寧可不寫 GPS
+      out.push(a);
+    }else if(isXmpSeg(seg)){
+      if(mode === 'nogps') continue;                      // XMP 也可能夾帶座標
+      out.push(seg);
+    }else out.push(seg);
+  }
+  return out;
+}
+/* 把原檔的 APP 區段接回新的 JPEG */
+function jpegWithApps(u8, apps){
+  const segs = jpegSegs(u8);
+  if(!segs || !apps.length) return u8;
+  const parts = [u8.slice(0, 2), ...apps];
+  segs.filter(s => !(s.marker >= 0xE0 && s.marker <= 0xEF))
+      .forEach(s => parts.push(u8.slice(s.start, s.end)));
+  return concat(parts);
+}
+/* PNG 用 eXIf 區塊夾帶同一份 TIFF 資料 */
+let CRCT = null;
+function crc32(u8){
+  if(!CRCT){
+    CRCT = new Uint32Array(256);
+    for(let i = 0; i < 256; i++){
+      let c = i;
+      for(let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      CRCT[i] = c >>> 0;
+    }
+  }
+  let c = 0xFFFFFFFF;
+  for(let i = 0; i < u8.length; i++) c = CRCT[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function pngChunk(type, data){
+  const out = new Uint8Array(12 + data.length);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, data.length);
+  for(let i = 0; i < 4; i++) out[4+i] = type.charCodeAt(i);
+  out.set(data, 8);
+  dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)));
+  return out;
+}
+function pngWithMeta(u8, apps){
+  const ex = apps.find(isExifSeg);
+  if(!ex || u8[0] !== 0x89 || ascii(u8, 1, 3) !== 'PNG') return u8;
+  const at = 33;                                          // 簽章 8 + IHDR 25
+  if(ascii(u8, 12, 4) !== 'IHDR') return u8;
+  return concat([u8.slice(0, at), pngChunk('eXIf', ex.slice(10)), u8.slice(at)]);
+}
+
+/* ============ 匯出 ============ */
+const MIME = {png:'image/png', webp:'image/webp', jpeg:'image/jpeg'};
+const EXT = f => f === 'jpeg' ? 'jpg' : f;
+let scope = 'one', picked = new Set(), busy = false;
+
+$('#save').onclick = () => openExport();
+function openExport(){
+  if(!cur() || !cur().img) return;
+  scope = 'one'; picked = new Set([S.active]);
+  $('#optOneName').textContent = cur().name;
+  drawScope(); buildPickList();
+  $('#exp').hidden = false;
+}
+function closeExport(){ if(!busy) $('#exp').hidden = true; }
+$('#expCancel').onclick = closeExport;
+$('#exp').onclick = e => { if(e.target.id === 'exp') closeExport(); };
+document.querySelectorAll('.opt').forEach(o => {
+  o.onclick = () => { if(busy) return; scope = o.dataset.s;
+    if(scope === 'pick' && picked.size === 0) picked = new Set([S.active]);
+    drawScope(); };
+});
+const filled = () => S.tabs.map((t,i) => t.img ? i : -1).filter(i => i >= 0);
+function targets(){
+  if(scope === 'one') return cur() && cur().img ? [S.active] : [];
+  if(scope === 'all') return filled();
+  return [...picked].filter(i => S.tabs[i] && S.tabs[i].img).sort((a,b) => a-b);
+}
+function drawScope(){
+  document.querySelectorAll('.opt').forEach(o => o.classList.toggle('on', o.dataset.s === scope));
+  $('#pickList').hidden = scope !== 'pick';
+  $('#pickAllRow').hidden = scope !== 'pick';
+  const t = cur(), g = t && geom(t);
+  $('#optOneMeta').textContent = g && g.ok ? `${g.Wo}×${g.Ho}` : '—';
+  const nf = filled().length;
+  const np = [...picked].filter(i => S.tabs[i] && S.tabs[i].img).length;
+  $('#optPickMeta').textContent = `${np} / ${nf}`;
+  $('#optAllMeta').textContent = `${nf} 個`;
+  $('#pickCount').textContent = `已選 ${np} 個`;
+  document.querySelectorAll('.pick').forEach(p => p.classList.toggle('on', picked.has(+p.dataset.i)));
+  const tg = targets().filter(i => geom(S.tabs[i]).ok);
+  const big = tg.some(i => { const g = geom(S.tabs[i]); return g.Wo*g.Ho > 20e6; });
+  $('#expStat').textContent = tg.length
+    ? `${tg.length} 個檔案 · ${S.fmt.toUpperCase()}` + (big && S.fmt === 'png' ? ' · 檔案會很大' : '')
+    : '沒有可匯出的分頁';
+  const n = tg.length;
+  $('#expGo').disabled = n === 0;
+}
+function buildPickList(){
+  const el = $('#pickList'); el.innerHTML = '';
+  filled().forEach(i => {
+    const t = S.tabs[i], g = geom(t);
+    const d = document.createElement('div');
+    d.className = 'pick' + (picked.has(i) ? ' on' : '');
+    d.dataset.i = i;
+    d.innerHTML = `<span class="box"></span><img src="${t.thumb}" alt="">
+      <span class="pn" title="${t.name}">${t.name}</span>
+      <span class="pm">${t.ratio.w}:${t.ratio.h} · ${g.ok ? g.Wo+'×'+g.Ho : '不可行'}</span>`;
+    d.onclick = () => { if(busy) return;
+      picked.has(i) ? picked.delete(i) : picked.add(i); drawScope(); };
+    el.appendChild(d);
+  });
+}
+$('#pickAll').onclick = () => { picked = new Set(filled()); drawScope(); };
+$('#pickNone').onclick = () => { picked = new Set(); drawScope(); };
+
+async function exportTab(t){
+  const g = geom(t);
+  if(!g.ok) return false;
+  const c = buildOutput(t, g);
+  const blob = await new Promise(r => c.toBlob(r, MIME[S.fmt], S.fmt === 'jpeg' ? 1 : undefined));
+  if(!blob) return false;
+  let bytes = new Uint8Array(await blob.arrayBuffer());
+  const apps = prepApps(t.meta, g.Wo, g.Ho, S.meta);
+  if(apps.length){
+    if(S.fmt === 'jpeg') bytes = jpegWithApps(bytes, apps);
+    else if(S.fmt === 'png') bytes = pngWithMeta(bytes, apps);
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([bytes], {type: MIME[S.fmt]}));
+  a.download = `${t.name.replace(/\.[^.]+$/,'')}_${t.ratio.w}x${t.ratio.h}_${g.Wo}x${g.Ho}.${EXT(S.fmt)}`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 6000);
+  return true;
+}
+$('#expGo').onclick = async () => {
+  if(busy) return;
+  const list = targets().map(i => S.tabs[i]).filter(t => geom(t).ok);
+  if(!list.length) return;
+  busy = true; $('#expGo').disabled = true; $('#expCancel').disabled = true;
+  let n = 0;
+  for(const t of list){
+    $('#expStat').textContent = `匯出中 ${n+1} / ${list.length}…`;
+    if(await exportTab(t)) n++;
+    if(list.length > 1) await new Promise(r => setTimeout(r, 320));
+  }
+  busy = false; $('#expCancel').disabled = false;
+  $('#exp').hidden = true;
+  toast(n === 1 ? '已下載 1 個檔案' : `已下載 ${n} 個檔案`);
+};
+
+let tid;
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(tid); tid = setTimeout(() => t.classList.remove('show'), 2200);
+}
+syncPanel(); buildTabs(); refreshSample();
+})();
+</script>
