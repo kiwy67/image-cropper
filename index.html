@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>比例裁切 — 照片保持比例，浮水印放在外面</title>
+<meta name="description" content="把照片裁成指定比例，浮水印貼在照片外側或疊在照片上，不佔照片畫面。逐畫素無損匯出，中繼資料逐項保留。全部在瀏覽器裡完成，照片不會上傳。">
+<meta property="og:title" content="比例裁切">
+<meta property="og:description" content="照片保持你要的比例，浮水印放在外面。全部在瀏覽器裡完成。">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E %3Crect width='64' height='64' fill='%230a1220'/%3E %3C!-- 拿掉旋轉，改成正的；框放大、留白縮小 --%3E %3Crect x='8' y='16' width='48' height='32' rx='6' fill='none' stroke='%231c4fc4' stroke-width='3.4'/%3E %3C!-- 中間線：位置偏右、不碰框的上下邊、圓角 --%3E %3Cpath d='M38 24 v16' stroke='%236fa8ff' stroke-width='2.6' stroke-linecap='round'/%3E %3C/svg%3E">
+<link rel="alternate icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACp0lEQVR4nO2Xz2pdVRTGf9/aJ/emsQSxQbm26SCN+A+cOu0LVFKk+AIOBHFS+gxOdKT4CM4ciEGoz6CdVHEUqzRpJFqEkuSm95yz9+fg3iQmuY7uKSJkwYYzOHut39nr7LXWJ8aWgHz58uoVhz4C3zCsAhUgZjMDrWADtK7izx892tg6jKnDh8GVa2uEvgjFy7axPWPckyYJSRSXbYo//H3rl6+BJICXlldvJMU3YOzSghKzf/lpMzhLUYHILu/sbG6s6+rV1wa1m/uhWLKdgRSC7O4IDIQmCJAlpeLyuKe5t6JxfTsiHQW3YVh7vKEjC8HT2rQFBMl2jkhLjevbFcSaxwmXBG2Bj99b5PobfYaj2UGKYX5O/LTVcOfLJzQthNA4ZqxVwAq2JNRkeOG54NbbF3h+IWgyqIOTMPDKoOKz7/b5eathoaeY/OQrFRCnN+yNTK9yZwBHIGcvVlTTXgwdry4BpsZ6tu7PAc4BzgHOAf4HAFNLcfHxesaVeDrAxb5Y6KnTbphiuq8jABvmAv7aL3z1fc31N7uZBzyZB37canj4ONOvdKIrarC8eqJJFsPwyR7zybij8xfwtIELixepTgGcSUHIvH7rXXpLL+K2mT0HNkqJvL/Hw7vfUuqTPo8BJNy29BYXefX9D+hfuoSbDgAOfefCn/d+YPe3X0n9/tHYXwGFf1xHRZBHI5rdXdy2nU0kikBx5taXCniAdA2wIqIdjTj4YwelRKnrTgAUQTsc0uzvowgMBUnYDzRYXvlEUd1xKRkpOWfS/Dyp3++mEExEQalr2oMDFAlwVkRyaT89JUxKBiWXMnWCnMmkSQqcpTgSJv8uzdTxOGpPlWYBpJ3NjXWXfNN4OyJVGueHLpckRaTKeNsl39zZ3FjnUJzyH8rzvwEngoC/EXTSnAAAAABJRU5ErkJggg==">
+<link rel="apple-touch-icon" href="data:image/png;base64,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">
+<meta name="theme-color" content="#0d0f12">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#060910; --panel:#0c111c; --panel2:#121926; --line:#1e2839;
+  --txt:#e8eef7; --dim:#8fa0b8; --dim2:#5f6f88;
+  --amber:#3ab9e8; --cyan:#2dd4bf;
+  --bad:#f4606f;
+  --glass:rgba(19,27,46,.55);
+  --glass-soft:rgba(24,34,56,.42);
+  --glass-hi:rgba(255,255,255,.07);
+  --glass-line:rgba(120,170,215,.13);
+  --blur:blur(28px) saturate(165%) brightness(.5);
+  --blur-lite:blur(16px) saturate(140%) brightness(.6);
+  --thick:inset 0 1px 0 var(--glass-hi),inset 0 -1px 0 rgba(0,0,0,.22),0 8px 32px rgba(0,0,0,.34);
+  --flow:var(--amber);
+  --flow-soft:color-mix(in srgb,var(--amber) 14%,transparent);
+  --glow:0 0 0 1px rgba(58,185,232,.22),0 10px 30px rgba(58,185,232,.2);
+  --glow-soft:0 6px 22px rgba(58,185,232,.15);
+  /* 液態玻璃變數：跟 crop-bench.html 用同一套最終調校過的數值——
+     邊緣高光壓到很淡、不做上亮下暗的立體對比（那樣會太厚重），
+     色散微帶虹彩但濃度低，模糊拉到規格建議的 26px。 */
+  --lg-edge:
+    inset 0 0 0 1px rgba(255,255,255,.06),
+    inset 1px 1px 0 -.5px rgba(255,255,255,.11),
+    inset -1px -1px 0 -.5px rgba(255,255,255,.04);
+  --lg-lift:0 1px 4px rgba(0,0,0,.16);
+  --lg-lift-lg:0 4px 14px rgba(0,0,0,.2);
+  --lg-disp:
+    inset 1.5px 0 1.5px -.5px rgba(90,220,255,.13),
+    inset -1.5px 0 1.5px -.5px rgba(255,130,205,.11);
+  --lg-lens:linear-gradient(142deg,
+    rgba(255,255,255,.055) 0%,
+    rgba(255,255,255,.02) 42%,
+    rgba(255,255,255,0) 72%);
+  --lg-spot:radial-gradient(120px 120px at var(--mx,50%) var(--my,50%),
+    rgba(255,255,255,.10),transparent 70%);
+  --lg-textbed:radial-gradient(34% 60% at 50% 48%,
+    rgba(4,8,16,.30) 0%, rgba(4,8,16,.16) 40%,
+    rgba(4,8,16,.06) 68%, transparent 92%);
+  --blur-glass:blur(26px) saturate(195%);
+  --blur-glass-fallback:blur(22px) saturate(195%);
+  --e2:var(--ease);
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:26px; --r-pill:999px;
+  --sp-1:6px; --sp-2:10px; --sp-3:16px; --sp-4:22px; --sp-5:30px; --sp-6:40px;
+  --spring:cubic-bezier(.34,1.28,.5,1);
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace;
+  --sans:"Noto Sans TC",system-ui,-apple-system,sans-serif;
+  --ease:cubic-bezier(.32,.72,.3,1);
+}
+*{box-sizing:border-box}
+/* 隱藏捲軸但保留捲動功能：這是一般的長頁面，捲動發生在 html/body
+   本身，不是內部容器，所以規則要放在最外層，不是套用工具頁那套
+   給內部小容器用的隱藏手法。 */
+html{scroll-behavior:smooth;scrollbar-width:none;-ms-overflow-style:none}
+html::-webkit-scrollbar{width:0;height:0;display:none}
+body{
+  margin:0;background:var(--ink);color:var(--txt);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;line-height:1.75;
+  scrollbar-width:none;-ms-overflow-style:none;
+}
+body::-webkit-scrollbar{width:0;height:0;display:none}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:3px}
+
+.wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+
+/* ---------- 章節標籤：沿用工具裡的區塊標題樣式 ---------- */
+.eyebrow{
+  display:flex;align-items:center;gap:10px;font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim2);
+  margin:0 0 18px;
+}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ---------- 首屏 ---------- */
+header{padding:76px 0 0}
+@media (max-width:720px){header{padding:48px 0 0}}
+.tagline{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--cyan);
+  margin:0 0 22px;display:inline-flex;align-items:center;gap:8px;
+}
+.tagline::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cyan)}
+h1{
+  margin:0 0 20px;font-weight:700;line-height:1.24;letter-spacing:-.01em;
+  font-size:clamp(30px,5.4vw,52px);
+}
+h1 .hl{color:var(--amber)}
+h1 .sub2{display:block;color:var(--dim)}
+h1 .sub2 .hl2{color:var(--cyan)}
+.lede{margin:0 0 34px;max-width:53ch;color:var(--dim);font-size:clamp(14.5px,1.6vw,16.5px)}
+.lede b{color:var(--txt);font-weight:500}
+
+.cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+/* 液態玻璃按鈕：跟 crop-bench.html 同一套折射系統。
+   ::before 負責背景扭曲折射，::after 負責表面高光跟隨滑鼠的光點。
+   為什麼不直接用 backdrop-filter 在 .btn 本身：這裡沒有 overflow:hidden
+   的祖先問題，但保持跟工具頁一致的雙層結構，未來要調整比較好對照。 */
+.btn{
+  display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:var(--r-md);
+  font-family:var(--sans);font-weight:400;font-size:15px;letter-spacing:.02em;
+  background:var(--amber);color:#04121f;border:0;text-decoration:none;position:relative;
+  isolation:isolate;overflow:hidden;
+  box-shadow:var(--lg-edge),var(--glow);
+  --mx:-200%;--my:-200%;
+  transition:filter .18s var(--ease),transform .14s var(--ease),box-shadow .2s var(--ease);
+}
+.btn::before{content:"";position:absolute;inset:0;border-radius:inherit;
+  pointer-events:none;z-index:-1;
+  backdrop-filter:var(--blur-glass-fallback);
+  -webkit-backdrop-filter:var(--blur-glass-fallback);
+  -webkit-mask-image:radial-gradient(120% 150% at 50% 40%,#000 58%,rgba(0,0,0,.55) 82%,transparent 100%);
+  mask-image:radial-gradient(120% 150% at 50% 40%,#000 58%,rgba(0,0,0,.55) 82%,transparent 100%);
+  background:var(--lg-textbed);
+  transition:backdrop-filter .34s cubic-bezier(.25,.8,.35,1),opacity .15s var(--e2)}
+@supports (backdrop-filter: url(#lgWarpSoft)) or (-webkit-backdrop-filter: url(#lgWarpSoft)){
+  .btn::before{
+    backdrop-filter:url(#lgWarpSoft) var(--blur-glass);
+    -webkit-backdrop-filter:url(#lgWarpSoft) var(--blur-glass);
+  }
+  .btn:hover::before{
+    backdrop-filter:url(#lgWarp) var(--blur-glass);
+    -webkit-backdrop-filter:url(#lgWarp) var(--blur-glass);
+  }
+}
+.btn::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:var(--lg-lens),var(--lg-spot);
+  transition:opacity .22s var(--e2)}
+.btn:hover{filter:brightness(1.06)}
+.btn:active{transform:scale(.975,.94)}
+.btn:active::after{opacity:.5}
+.btn .arw{transition:transform .22s var(--ease)}
+.btn:hover .arw{transform:translateX(3px)}
+.btn.ghost{
+  background:transparent;color:var(--dim);border:1px solid var(--line);font-weight:400;
+  box-shadow:none;
+}
+.btn.ghost::before{background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.btn.ghost::after{background:none}
+.btn.ghost:hover{color:var(--txt);border-color:rgba(56,189,248,.35);filter:none}
+
+/* ---------- 主視覺：會實際運算的幾何圖 ---------- */
+.rig{margin:56px 0 0;border-top:1px solid var(--line)}
+.rigtop{
+  display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;
+  padding:14px 0;border-bottom:1px solid var(--line);
+}
+.rigtop .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--dim2);text-transform:uppercase}
+.picker{display:flex;gap:5px;flex-wrap:wrap}
+.picker button{
+  font-family:var(--mono);font-size:11.5px;padding:6px 10px;border-radius:var(--r-sm);cursor:pointer;
+  border:1px solid var(--line);background:var(--panel2);color:var(--dim);
+  transition:background .2s var(--ease),border-color .2s var(--ease),color .2s var(--ease),transform .16s var(--ease);
+}
+.picker button:hover{border-color:rgba(56,189,248,.35);color:var(--txt);transform:translateY(-1px)}
+.picker button[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:#04121f;font-weight:500}
+
+/* .stage／.readout／.check 三塊緊貼在一起組成一張示範卡片，原本
+   完全是直角、看起來生硬。整塊的外緣（頂部與底部）收成圓角，
+   中間的分隔線是內部接縫，維持直角不動——這樣看起來像一張完整的
+   卡片被分成幾個區段，而不是三塊硬拼在一起的矩形。 */
+.stage{
+  display:flex;align-items:flex-end;justify-content:center;gap:26px;
+  padding:52px 20px 44px;min-height:330px;
+  /* 跟 .card／.plot 這些既有卡片用同一個圓角級距（--r-md），
+     保持整站的圓角語彙一致。獨立成自己一塊卡片，四個角都圓，
+     跟下面的資訊列拉開間距，不再是黏在一起的一整條。 */
+  border-radius:var(--r-md);
+  margin-bottom:var(--sp-3);
+  background:
+    radial-gradient(120% 100% at 50% 0%,rgba(21,28,43,.8) 0%,rgba(13,15,18,0) 70%),
+    repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 44px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 1px,transparent 1px 44px);
+}
+.frame{position:relative}
+.photo{
+  border:1.5px solid var(--amber);background:
+    linear-gradient(148deg,rgba(240,169,59,.10),rgba(240,169,59,.03) 55%,rgba(94,201,214,.05));
+  display:flex;align-items:center;justify-content:center;
+  transition:width .62s var(--ease),height .62s var(--ease);
+}
+.photo span{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:.04em}
+.bar{
+  border:1.5px solid var(--cyan);border-top:none;background:rgba(94,201,214,.11);
+  display:flex;align-items:center;justify-content:center;
+  transition:width .62s var(--ease);
+}
+.bar span{font-family:var(--mono);font-size:10.5px;color:var(--cyan);letter-spacing:.06em;white-space:nowrap}
+/* 尺寸標註 */
+.dim{position:absolute;font-family:var(--mono);font-size:10.5px;color:var(--dim2);white-space:nowrap}
+.dim.top{top:-22px;left:0;right:0;text-align:center}
+.dim.side{right:calc(100% + 12px);top:0;height:100%;display:flex;align-items:center}
+.dim.bot{left:calc(100% + 12px);bottom:0;display:flex;align-items:center;height:100%}
+/* 窄螢幕時，相框本身就快佔滿寬度，側邊跟右下角這兩個標籤原本浮在
+   相框外面（right:calc(100% + 12px) / left:calc(100% + 12px)）會被推
+   出視窗，造成整頁橫向溢出。改成疊到相框內側的對應邊角，加一層
+   半透明底色跟圓角，在照片背景上還是看得清楚，不需要相框外的
+   額外空間。上方的標籤留在原位不受影響，因為它本來就沒有超出。 */
+@media (max-width:480px){
+  .dim.side{right:auto;left:6px;height:auto;top:6px;
+    background:rgba(6,10,18,.72);padding:3px 7px;border-radius:5px}
+  .dim.bot{left:auto;right:6px;height:auto;bottom:6px;
+    background:rgba(6,10,18,.72);padding:3px 7px;border-radius:5px}
+}
+
+.readout{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r-md) var(--r-md) 0 0;
+  background:var(--panel)}
+.readout .cell{padding:11px 18px;border-right:1px solid var(--line);flex:1 1 auto;min-width:130px}
+.readout .cell:last-child{border-right:none}
+.readout .k{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim2);margin-bottom:3px}
+.readout .v{font-family:var(--mono);font-size:14px;color:var(--txt)}
+.readout .v.a{color:var(--amber)} .readout .v.c{color:var(--cyan)}
+.check{
+  padding:13px 18px;border:1px solid var(--line);border-top:1px solid var(--line);
+  font-family:var(--mono);font-size:12px;
+  color:var(--dim);display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:rgba(10,15,26,.7);
+  border-radius:0 0 var(--r-md) var(--r-md);
+  margin-top:-1px;
+}
+.check .ok{color:var(--amber)}
+.check .eq{color:var(--dim2)}
+
+/* ---------- 內容區塊 ---------- */
+section{padding:84px 0 0}
+@media (max-width:720px){section{padding:60px 0 0}}
+h2{margin:0 0 14px;font-size:clamp(21px,2.9vw,27px);font-weight:700;letter-spacing:-.005em}
+.say{margin:0 0 30px;max-width:56ch;color:var(--dim);font-size:15px}
+.say b{color:var(--txt);font-weight:500}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:14px}
+.card{
+  border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);padding:20px;
+  transition:border-color .22s var(--ease),background .22s var(--ease);
+}
+.card:hover{border-color:rgba(56,189,248,.3);background:var(--panel2)}
+.card h3{margin:0 0 8px;font-size:15px;font-weight:700}
+.card p{margin:0;font-size:13px;color:var(--dim);line-height:1.8}
+.card .tick{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--dim2);
+  display:block;margin-bottom:11px;text-transform:uppercase;
+}
+
+/* 擺放方式小圖 */
+.plots{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:12px;margin:0 0 26px}
+.plot{border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);padding:14px 12px;text-align:center}
+.plot .box{position:relative;height:56px;display:flex;align-items:center;justify-content:center;margin-bottom:9px}
+.plot i{position:absolute;display:block;border-radius:1px}
+.plot .p{border:1.5px solid var(--amber);background:rgba(240,169,59,.09)}
+.plot .b{background:var(--cyan);opacity:.85}
+.plot em{font-style:normal;font-family:var(--mono);font-size:10.5px;color:var(--dim);letter-spacing:.06em}
+
+.note{
+  margin-top:30px;border:1px solid var(--line);border-left:2px solid var(--cyan);
+  border-radius:var(--r-md);background:var(--panel);padding:16px 18px;
+}
+.note p{margin:0;font-size:13px;color:var(--dim);line-height:1.85}
+.note b{color:var(--txt);font-weight:500}
+
+/* ---------- 結尾 ---------- */
+.tail{margin:88px 0 0;border-top:1px solid var(--line);padding:44px 0 0;text-align:center}
+.tail h2{margin-bottom:12px}
+.tail .say{margin:0 auto 26px}
+.tail .cta{justify-content:center}
+footer{
+  margin-top:64px;border-top:1px solid var(--line);padding:22px 0 40px;
+  display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;
+  font-family:var(--mono);font-size:11px;color:var(--dim2);letter-spacing:.04em;
+}
+footer .sp{flex:1}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+}
+
+/* 背景流動光暈：跟工具頁一致的視覺語言。固定在最底層、不接受滑鼠事件。 */
+body::before{content:"";position:fixed;inset:-20%;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(46% 52% at 12% 16%,rgba(58,185,232,.30),transparent 70%),
+    radial-gradient(42% 48% at 88% 72%,rgba(139,124,246,.26),transparent 70%),
+    radial-gradient(38% 42% at 62% 4%,rgba(45,212,191,.22),transparent 72%);
+  filter:blur(40px);animation:drift 40s ease-in-out infinite alternate}
+@keyframes drift{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  50%{transform:translate3d(1.5%,-2%,0) scale(1.05)}
+  100%{transform:translate3d(-1.5%,2%,0) scale(1.02)}
+}
+body>*{position:relative;z-index:1}
+</style>
+</head>
+<body>
+<!-- 液態玻璃的折射扭曲：跟 crop-bench.html 用同一組濾鏡定義，
+     視覺質感才會一致。細節說明見那邊的註解。 -->
+<svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true">
+  <filter id="lgWarp" x="-20%" y="-20%" width="140%" height="140%"
+          color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.0035 0.008"
+                  numOctaves="3" seed="7" result="noise"/>
+    <feGaussianBlur in="noise" stdDeviation="3" result="softNoise"/>
+    <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="58"
+                       xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+  <filter id="lgWarpSoft" x="-20%" y="-20%" width="140%" height="140%"
+          color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.004 0.009"
+                  numOctaves="3" seed="3" result="n2"/>
+    <feGaussianBlur in="n2" stdDeviation="3.2" result="sn2"/>
+    <feDisplacementMap in="SourceGraphic" in2="sn2" scale="42"
+                       xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="wrap">
+  <header>
+    <p class="tagline mono">全部在瀏覽器裡跑完 · 照片不會上傳</p>
+    <h1>照片保持<span class="hl">精準比例</span><span class="sub2">浮水印放在<span class="hl2">外面</span></span></h1>
+    <p class="lede">
+      多數工具將浮水印疊加於照片之上，或把浮水印的面積一併計入比例——標示為 4:3，
+      照片本身卻並非精準的 4:3。此工具將兩者分開處理：<b>裁切框即為照片本身的比例</b>，
+      浮水印獨立貼附於外側，不佔用任何一格畫素。
+    </p>
+    <div class="cta">
+      <a class="btn" href="./crop-bench.html">開始使用<span class="arw" aria-hidden="true">→</span></a>
+      <a class="btn ghost" href="./guide.html">功能說明</a>
+      <a class="btn ghost" href="#how">先看它怎麼算</a>
+    </div>
+  </header>
+
+  <!-- 主視覺：真的在算，不是示意 -->
+  <div class="rig" id="how">
+    <div class="rigtop">
+      <span class="lbl">選一個比例</span>
+      <div class="picker" id="picker" role="group" aria-label="輸出比例"></div>
+    </div>
+
+    <div class="stage">
+      <div class="frame">
+        <span class="dim top mono" id="dTop">2880 px</span>
+        <span class="dim side mono" id="dSide">2160 px</span>
+        <span class="dim bot mono" id="dBot">400 px</span>
+        <div class="photo" id="photo"><span id="pLabel">4:3</span></div>
+        <div class="bar" id="bar"><span>浮水印</span></div>
+      </div>
+    </div>
+
+    <div class="readout">
+      <div class="cell"><span class="k">來源</span><span class="v mono">3840 × 2160</span></div>
+      <div class="cell"><span class="k">照片區</span><span class="v mono a" id="rPhoto">2880 × 2160</span></div>
+      <div class="cell"><span class="k">浮水印</span><span class="v mono c" id="rBar">2880 × 400</span></div>
+      <div class="cell"><span class="k">輸出</span><span class="v mono" id="rOut">2880 × 2560</span></div>
+    </div>
+    <p class="check mono">
+      <span>照片區比例驗算</span>
+      <span class="eq" id="cCalc">2880 ÷ 2160 = 1.3333</span>
+      <span class="eq">=</span>
+      <span class="ok" id="cWant">4 ÷ 3 = 1.3333</span>
+      <span class="ok">✓ 完全吻合</span>
+    </p>
+  </div>
+
+  <section>
+    <p class="eyebrow">浮水印</p>
+    <h2>貼在外面，或疊在上面</h2>
+    <p class="say">
+      貼附於外側時，四個邊皆可選擇；左右兩側會旋轉 90 度，文字沿邊緣排列。
+      疊加模式則可直接於畫面上拖曳定位，並可調整大小、不透明度與傾斜角度。
+    </p>
+    <div class="plots">
+      <div class="plot">
+        <div class="box">
+          <i class="p" style="left:12%;right:12%;top:6%;bottom:26%"></i>
+          <i class="b" style="left:12%;right:12%;bottom:12%;height:9px"></i>
+        </div><em>下</em>
+      </div>
+      <div class="plot">
+        <div class="box">
+          <i class="b" style="left:12%;right:12%;top:12%;height:9px"></i>
+          <i class="p" style="left:12%;right:12%;top:26%;bottom:6%"></i>
+        </div><em>上</em>
+      </div>
+      <div class="plot">
+        <div class="box">
+          <i class="b" style="top:10%;bottom:10%;left:22%;width:9px"></i>
+          <i class="p" style="left:34%;right:22%;top:10%;bottom:10%"></i>
+        </div><em>左</em>
+      </div>
+      <div class="plot">
+        <div class="box">
+          <i class="p" style="left:22%;right:34%;top:10%;bottom:10%"></i>
+          <i class="b" style="top:10%;bottom:10%;right:22%;width:9px"></i>
+        </div><em>右</em>
+      </div>
+      <div class="plot">
+        <div class="box">
+          <i class="p" style="left:14%;right:14%;top:8%;bottom:8%"></i>
+          <i class="b" style="right:20%;bottom:16%;width:38%;height:8px;opacity:.6"></i>
+        </div><em>疊加</em>
+      </div>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <span class="tick">自製</span>
+        <h3>打字排出自己的浮水印</h3>
+        <p>底色搭配文字圖層，字體、字級、字距、顏色、傾斜與直排皆可調整。拖曳時會自動吸附至中線及其他文字的軸線。</p>
+      </div>
+      <div class="card">
+        <span class="tick">日期</span>
+        <h3>西元或民國，一鍵加入</h3>
+        <p>可選擇西元或民國年格式，一鍵插入當下日期。加入後即為一般文字圖層，內容與樣式皆可自由修改。</p>
+      </div>
+      <div class="card">
+        <span class="tick">長度</span>
+        <h3>維持原尺度，或縮成等長</h3>
+        <p>前者維持標誌原始畫素大小，超出照片的部分予以裁切；後者則整條等比縮小至符合照片寬度。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">匯出</p>
+    <h2>照片區不動一格畫素</h2>
+    <p class="say">
+      照片區域是從原圖<b>逐畫素複製</b>而來，不經縮放亦不重新取樣。浮水印則依輸出尺寸即時重繪，
+      無論放大至何種尺寸皆不失真。若需完全無損輸出，可選擇 PNG 或 WebP 格式。
+    </p>
+    <div class="cards">
+      <div class="card">
+        <span class="tick">中繼資料</span>
+        <h3>逐項決定要不要留</h3>
+        <p>拍攝參數、定位座標、色彩描述檔、編輯記錄各自獨立勾選。方向標記將歸零、尺寸則改為裁切後的數值，避免看圖軟體將已轉正的照片重複旋轉。</p>
+      </div>
+      <div class="card">
+        <span class="tick">分頁</span>
+        <h3>多張照片各自獨立</h3>
+        <p>每張照片獨立成一個分頁，比例、裁切、浮水印各自互不干擾，並可拖曳調整順序。匯出時可選擇單一分頁、多個分頁，或一次全部輸出。</p>
+      </div>
+      <div class="card">
+        <span class="tick">格式</span>
+        <h3>JPEG / PNG / WebP</h3>
+        <p>PNG 與 WebP 為無損格式；JPEG 即使品質設為 100 仍屬有損量化，介面上會明確標示此點，並列出各格式可保留的中繼資料範圍。</p>
+      </div>
+      <div class="card">
+        <span class="tick">預覽</span>
+        <h3>看到的就是匯出的樣子</h3>
+        <p>子母視窗會將成品實際編碼再解碼顯示，因此 JPEG 品質造成的畫質差異清晰可辨，並同步標示預估檔案大小與原檔的倍數關係。</p>
+      </div>
+      <div class="card">
+        <span class="tick">校正</span>
+        <h3>旋轉、水平、圓角</h3>
+        <p>90 度整轉不損及畫質；水平微調則會自動內縮，避免留下空白角落。圓角裁切處為真正的透明效果，並提供六種構圖輔助線、濃度可調。</p>
+      </div>
+      <div class="card">
+        <span class="tick">設定檔</span>
+        <h3>整組設定存成一個檔案</h3>
+        <p>比例、浮水印、中繼資料等設定可匯出成 JSON 檔，下次匯入即可套用到所有分頁，不必重新調整一次。</p>
+      </div>
+    </div>
+    <div class="note">
+      <p><b>照片全程留在本機，不會外傳。</b>整個流程無需伺服器、無需上傳——解碼、裁切、合成、編碼皆於瀏覽器內完成，關閉分頁後即不留任何痕跡。</p>
+    </div>
+  </section>
+
+  <div class="tail">
+    <h2>上傳一張照片即可開始</h2>
+    <p class="say">無需註冊，亦無需安裝。</p>
+    <div class="cta">
+      <a class="btn" href="./crop-bench.html">開始使用<span class="arw" aria-hidden="true">→</span></a>
+      <a class="btn ghost" href="./guide.html">功能說明</a>
+    </div>
+  </div>
+
+  <footer>
+    <span>建議使用 Chrome、Edge、Safari 或 Firefox 的較新版本</span>
+    <span class="sp"></span>
+    <span>HEIC 可直接上傳，會自動轉檔</span>
+    <span>對應工具版本 v114.514</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  /* 用跟工具裡一模一樣的算式：來源 3840×2160，浮水印條 400/3840 */
+  const SRC_W = 3840, SRC_H = 2160, BAR_ASPECT = 400 / 3840;
+  const RATIOS = [[4,3],[1,1],[3,4],[16,9],[9,16],[3,2]];
+
+  const solve = (rw, rh) => {
+    const R = rw / rh;
+    let Wo = Math.min(SRC_W, Math.round(SRC_H * R));
+    let Ho = Math.round(Wo / R);
+    if(Ho > SRC_H){ Ho = SRC_H; Wo = Math.round(Ho * R); }
+    return { Wo, Ho, bar: Math.round(SRC_W * BAR_ASPECT) };
+  };
+
+  const photo = $('#photo'), bar = $('#bar');
+  const picker = $('#picker');
+  let idx = 0, timer = 0, held = false;
+
+  RATIOS.forEach(([w,h], i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = w + ':' + h;
+    b.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+    b.addEventListener('click', () => { held = true; clearInterval(timer); show(i); });
+    picker.appendChild(b);
+  });
+
+  function show(i){
+    idx = i;
+    const [rw, rh] = RATIOS[i];
+    const g = solve(rw, rh);
+
+    /* 高度固定 268px，寬度照真實比例換算，所以圖上的形狀就是實際輸出的形狀 */
+    const k = 268 / (g.Ho + g.bar);
+    photo.style.width  = (g.Wo * k) + 'px';
+    photo.style.height = (g.Ho * k) + 'px';
+    bar.style.width    = (g.Wo * k) + 'px';
+    bar.style.height   = (g.bar * k) + 'px';
+
+    $('#pLabel').textContent = rw + ':' + rh;
+    $('#dTop').textContent  = g.Wo + ' px';
+    $('#dSide').textContent = g.Ho + ' px';
+    $('#dBot').textContent  = g.bar + ' px';
+    $('#rPhoto').textContent = g.Wo + ' × ' + g.Ho;
+    $('#rBar').textContent   = g.Wo + ' × ' + g.bar;
+    $('#rOut').textContent   = g.Wo + ' × ' + (g.Ho + g.bar);
+    $('#cCalc').textContent  = `${g.Wo} ÷ ${g.Ho} = ${(g.Wo/g.Ho).toFixed(4)}`;
+    $('#cWant').textContent  = `${rw} ÷ ${rh} = ${(rw/rh).toFixed(4)}`;
+
+    [...picker.children].forEach((b, j) =>
+      b.setAttribute('aria-pressed', j === i ? 'true' : 'false'));
+  }
+
+  show(0);
+  const slow = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!slow) timer = setInterval(() => { if(!held) show((idx + 1) % RATIOS.length); }, 2800);
+})();
+
+/* 液態玻璃的光點跟著滑鼠移動：跟 crop-bench.html 同一套做法，
+   只在滑鼠裝置上啟用，觸控裝置不會誤觸發。 */
+if(window.matchMedia && window.matchMedia('(hover:hover) and (pointer:fine)').matches){
+  document.body.addEventListener('pointermove', e => {
+    const el = e.target.closest('.btn:not(.ghost)');
+    if(!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
+    el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
+  }, {passive:true});
+  document.body.addEventListener('pointerout', e => {
+    const el = e.target.closest && e.target.closest('.btn:not(.ghost)');
+    if(el && !el.contains(e.relatedTarget)){
+      el.style.setProperty('--mx', '-200%'); el.style.setProperty('--my', '-200%');
+    }
+  }, {passive:true});
+}
+</script>
+</body>
+</html>
